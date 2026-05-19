@@ -83,6 +83,8 @@ func (o *OperatorSchedulerGetConfig) Run(args []string) int {
 		fmt.Sprintf("Binpack Score Weight|%v", schedConfig.EffectiveBinpackScoreWeight()),
 		fmt.Sprintf("Device Affinity Score Weight|%v", schedConfig.EffectiveDeviceAffinityScoreWeight()),
 		fmt.Sprintf("Memory Oversubscription|%v", schedConfig.MemoryOversubscriptionEnabled),
+		fmt.Sprintf("GPU Reserved CPU Cores|%d", schedConfig.GPUResourceReservation.CPUCores),
+		fmt.Sprintf("GPU Reserved Memory MB|%d", schedConfig.GPUResourceReservation.MemoryMB),
 		fmt.Sprintf("Reject Job Registration|%v", schedConfig.RejectJobRegistration),
 		fmt.Sprintf("Pause Eval Broker|%v", schedConfig.PauseEvalBroker),
 		fmt.Sprintf("Preemption System Scheduler|%v", schedConfig.PreemptionConfig.SystemSchedulerEnabled),

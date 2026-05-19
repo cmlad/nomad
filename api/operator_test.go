@@ -68,6 +68,10 @@ func TestOperator_SchedulerSetConfiguration(t *testing.T) {
 			ServiceSchedulerEnabled:  true,
 			GreedyPreemptionEnabled:  true,
 		},
+		GPUResourceReservation: SchedulerGPUResourceReservation{
+			CPUCores: 1,
+			MemoryMB: 16384,
+		},
 		MemoryOversubscriptionEnabled: true,
 		RejectJobRegistration:         true,
 		PauseEvalBroker:               true,
@@ -87,6 +91,7 @@ func TestOperator_SchedulerSetConfiguration(t *testing.T) {
 	must.True(t, schedulerConfig.SchedulerConfig.PauseEvalBroker)
 	must.True(t, schedulerConfig.SchedulerConfig.RejectJobRegistration)
 	must.True(t, schedulerConfig.SchedulerConfig.MemoryOversubscriptionEnabled)
+	must.Eq(t, newSchedulerConfig.GPUResourceReservation, schedulerConfig.SchedulerConfig.GPUResourceReservation)
 	must.Eq(t, schedulerConfig.SchedulerConfig.PreemptionConfig, newSchedulerConfig.PreemptionConfig)
 	must.Eq(t, 200, schedulerConfig.SchedulerConfig.EffectiveMinAffinitySpreadScoreNodes())
 	must.Eq(t, 0.5, schedulerConfig.SchedulerConfig.EffectiveBinpackScoreWeight())

@@ -2576,6 +2576,10 @@ func TestFSM_SnapshotRestore_SchedulerConfiguration(t *testing.T) {
 		PreemptionConfig: structs.PreemptionConfig{
 			SystemSchedulerEnabled: true,
 		},
+		GPUResourceReservation: structs.SchedulerGPUResourceReservation{
+			CPUCores: 1,
+			MemoryMB: 16384,
+		},
 	}
 	schedConfig.Canonicalize()
 	state.SchedulerSetConfig(1000, schedConfig)
@@ -3031,6 +3035,10 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 				SystemSchedulerEnabled: true,
 				BatchSchedulerEnabled:  true,
 			},
+			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
+				CPUCores: 2,
+				MemoryMB: 32768,
+			},
 		},
 	}
 	req.Config.Canonicalize()
@@ -3048,6 +3056,7 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 
 	require.Equal(config.PreemptionConfig.SystemSchedulerEnabled, req.Config.PreemptionConfig.SystemSchedulerEnabled)
 	require.Equal(config.PreemptionConfig.BatchSchedulerEnabled, req.Config.PreemptionConfig.BatchSchedulerEnabled)
+	require.Equal(config.GPUResourceReservation, req.Config.GPUResourceReservation)
 
 	// Now use CAS and provide an old index
 	req.CAS = true

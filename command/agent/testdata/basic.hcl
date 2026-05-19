@@ -170,6 +170,11 @@ server {
       service_scheduler_enabled  = true
       greedy_preemption_enabled  = true
     }
+
+    gpu_resource_reservation {
+      cpu_cores = 2
+      memory_mb = 16384
+    }
   }
 
   license_path = "/tmp/nomad.hclic"

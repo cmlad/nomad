@@ -179,6 +179,8 @@ type BinPackIterator struct {
 	schedulerAlgorithm        structs.SchedulerAlgorithm
 	binpackScoreWeight        float64
 	deviceAffinityScoreWeight float64
+	taskGroupUsesGPU          bool
+	gpuResourceReservation    structs.SchedulerGPUResourceReservation
 }
 
 // NewBinPackIterator returns a BinPackIterator which tries to fit tasks
@@ -206,11 +208,12 @@ func (iter *BinPackIterator) SetJob(job *structs.Job) {
 
 func (iter *BinPackIterator) SetTaskGroup(taskGroup *structs.TaskGroup) {
 	iter.taskGroup = taskGroup
+	iter.taskGroupUsesGPU = taskGroupUsesGPU(taskGroup)
 
 	// When binpacking is enabled, override to use spread for jobs without a GPU or
 	// with specific GPUs
 	if iter.schedulerAlgorithm == structs.SchedulerAlgorithmBinpack && taskGroup != nil {
-		if taskGroupUsesGPU(taskGroup) && !taskGroupUsesSpreadGPU(taskGroup) {
+		if iter.taskGroupUsesGPU && !taskGroupUsesSpreadGPU(taskGroup) {
 			iter.scoreFit = structs.ScoreFitBinPack
 		} else {
 			iter.scoreFit = structs.ScoreFitSpread
@@ -235,6 +238,12 @@ func (iter *BinPackIterator) SetSchedulerConfiguration(schedConfig *structs.Sche
 
 	iter.binpackScoreWeight = schedConfig.EffectiveBinpackScoreWeight()
 	iter.deviceAffinityScoreWeight = schedConfig.EffectiveDeviceAffinityScoreWeight()
+
+	// Set GPU resource reservation.
+	iter.gpuResourceReservation = structs.SchedulerGPUResourceReservation{}
+	if schedConfig != nil {
+		iter.gpuResourceReservation = schedConfig.GPUResourceReservation
+	}
 }
 
 func (iter *BinPackIterator) Next() *RankedNode {
@@ -330,6 +339,14 @@ NEXTNODE:
 		}
 
 		var allocsToPreempt []*structs.Allocation
+
+		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+			if exhausted, dim := gpuReservationCannotCompute(option.Node, proposed, iter.gpuResourceReservation); exhausted {
+				netIdx.Release()
+				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
+				continue
+			}
+		}
 
 		// Initialize preemptor with node
 		preemptor := NewPreemptor(iter.priority, iter.ctx, &iter.jobId)
@@ -854,6 +871,13 @@ NEXTNODE:
 
 		// Add the resources we are trying to fit
 		proposed = append(proposed, &structs.Allocation{AllocatedResources: total})
+		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+			if exhausted, dim := gpuReservationCannotCompute(option.Node, proposed, iter.gpuResourceReservation); exhausted {
+				netIdx.Release()
+				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
+				continue
+			}
+		}
 
 		// Compute fit and the util used for scoring.
 		//
@@ -946,6 +970,18 @@ NEXTNODE:
 			// If we were unable to find preempted allocs to meet these requirements
 			// mark as exhausted and continue
 			if len(preemptedAllocs) == 0 {
+				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
+				continue
+			}
+		}
+		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+			finalAllocs := current
+			if len(allocsToPreempt) > 0 {
+				finalAllocs = structs.RemoveAllocs(finalAllocs, allocsToPreempt)
+			}
+			finalAllocs = append(finalAllocs, &structs.Allocation{AllocatedResources: total})
+
+			if violated, dim := gpuReservationViolated(option.Node, finalAllocs, iter.gpuResourceReservation); violated {
 				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
 				continue
 			}

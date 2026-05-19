@@ -307,10 +307,14 @@ func (s *HTTPServer) schedulerUpdateConfig(resp http.ResponseWriter, req *http.R
 	}
 
 	args.Config = structs.SchedulerConfiguration{
-		SchedulerAlgorithm:            structs.SchedulerAlgorithm(conf.SchedulerAlgorithm),
-		MinAffinitySpreadScoreNodes:   conf.MinAffinitySpreadScoreNodes,
-		BinpackScoreWeight:            conf.BinpackScoreWeight,
-		DeviceAffinityScoreWeight:     conf.DeviceAffinityScoreWeight,
+		SchedulerAlgorithm:          structs.SchedulerAlgorithm(conf.SchedulerAlgorithm),
+		MinAffinitySpreadScoreNodes: conf.MinAffinitySpreadScoreNodes,
+		BinpackScoreWeight:          conf.BinpackScoreWeight,
+		DeviceAffinityScoreWeight:   conf.DeviceAffinityScoreWeight,
+		GPUResourceReservation: structs.SchedulerGPUResourceReservation{
+			CPUCores: conf.GPUResourceReservation.CPUCores,
+			MemoryMB: conf.GPUResourceReservation.MemoryMB,
+		},
 		MemoryOversubscriptionEnabled: conf.MemoryOversubscriptionEnabled,
 		RejectJobRegistration:         conf.RejectJobRegistration,
 		PauseEvalBroker:               conf.PauseEvalBroker,

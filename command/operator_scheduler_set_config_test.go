@@ -58,6 +58,8 @@ func TestOperatorSchedulerSetConfig_Run(t *testing.T) {
 		"-preempt-sysbatch-scheduler=true",
 		"-preempt-system-scheduler=false",
 		"-preempt-greedy=true",
+		"-gpu-reserved-cpu-cores=2",
+		"-gpu-reserved-memory-mb=16384",
 	}
 	must.Zero(t, c.Run(modifyingArgs))
 	s := ui.OutputWriter.String()
@@ -80,6 +82,10 @@ func TestOperatorSchedulerSetConfig_Run(t *testing.T) {
 		MinAffinitySpreadScoreNodes:   &minAffinitySpreadScoreNodes,
 		BinpackScoreWeight:            &binpackScoreWeight,
 		DeviceAffinityScoreWeight:     &deviceAffinityScoreWeight,
+		GPUResourceReservation: api.SchedulerGPUResourceReservation{
+			CPUCores: 2,
+			MemoryMB: 16384,
+		},
 	}, modifiedConfig.SchedulerConfig)
 
 	ui.ErrorWriter.Reset()
@@ -117,6 +123,24 @@ func TestOperatorSchedulerSetConfig_Run(t *testing.T) {
 	must.StrContains(t, ui.OutputWriter.String(), "Scheduler configuration updated!")
 	ui.ErrorWriter.Reset()
 	ui.OutputWriter.Reset()
+
+	// Explicit zero disables the selected reservation dimension while unset
+	// flags preserve the existing value.
+	must.Zero(t, c.Run([]string{
+		"-address=" + addr,
+		"-gpu-reserved-cpu-cores=0",
+	}))
+	zeroCPUConfig, _, err := srv.APIClient().Operator().SchedulerGetConfiguration(nil)
+	must.NoError(t, err)
+	must.Eq(t, 0, zeroCPUConfig.SchedulerConfig.GPUResourceReservation.CPUCores)
+	must.Eq(t, 16384, zeroCPUConfig.SchedulerConfig.GPUResourceReservation.MemoryMB)
+	ui.ErrorWriter.Reset()
+	ui.OutputWriter.Reset()
+
+	must.One(t, c.Run([]string{"-address=" + addr, "-gpu-reserved-memory-mb=-1"}))
+	must.StrContains(t, ui.ErrorWriter.String(), "must be a non-negative integer")
+	ui.ErrorWriter.Reset()
+	ui.OutputWriter.Reset()
 }
 
 func schedulerConfigEquals(t *testing.T, expected, actual *api.SchedulerConfiguration) {
@@ -128,4 +152,5 @@ func schedulerConfigEquals(t *testing.T, expected, actual *api.SchedulerConfigur
 	must.Eq(t, expected.MemoryOversubscriptionEnabled, actual.MemoryOversubscriptionEnabled)
 	must.Eq(t, expected.PauseEvalBroker, actual.PauseEvalBroker)
 	must.Eq(t, expected.PreemptionConfig, actual.PreemptionConfig)
+	must.Eq(t, expected.GPUResourceReservation, actual.GPUResourceReservation)
 }

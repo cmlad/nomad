@@ -107,7 +107,6 @@ func TestSchedulerConfiguration_WithNodePool(t *testing.T) {
 		})
 	}
 }
-
 func TestSchedulerConfiguration_ScoreWeights(t *testing.T) {
 	ci.Parallel(t)
 
@@ -149,4 +148,44 @@ func TestSchedulerConfiguration_ScoreWeights(t *testing.T) {
 	must.ErrorContains(t, (&SchedulerConfiguration{
 		DeviceAffinityScoreWeight: pointer.Of(math.NaN()),
 	}).Validate(), "device_affinity_score_weight")
+}
+
+func TestSchedulerConfiguration_Validate_GPUResourceReservation(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		name   string
+		config *SchedulerConfiguration
+	}{
+		{
+			name: "negative cpu",
+			config: &SchedulerConfiguration{
+				GPUResourceReservation: SchedulerGPUResourceReservation{
+					CPUCores: -1,
+				},
+			},
+		},
+		{
+			name: "negative memory",
+			config: &SchedulerConfiguration{
+				GPUResourceReservation: SchedulerGPUResourceReservation{
+					MemoryMB: -1,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			must.Error(t, tc.config.Validate())
+		})
+	}
+
+	valid := &SchedulerConfiguration{
+		GPUResourceReservation: SchedulerGPUResourceReservation{
+			CPUCores: 1,
+			MemoryMB: 16384,
+		},
+	}
+	must.NoError(t, valid.Validate())
 }
