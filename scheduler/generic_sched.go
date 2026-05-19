@@ -923,22 +923,51 @@ func (s *GenericScheduler) selectNextOption(tg *structs.TaskGroup, selectOptions
 	}
 	// Run stack again with preemption enabled
 	if option == nil && enablePreemption {
-		selectOptions.Preempt = true
-		option = s.stack.Select(tg, selectOptions)
+		preemptOptions := copySelectOptions(selectOptions)
+		preemptOptions.Preempt = true
+		preemptOptions.PreemptGreedy = false
+		option = s.stack.Select(tg, preemptOptions)
 	}
 
-	// Third pass: greedy-only preemption. Gated on
-	// PreemptionConfig.GreedyPreemptionEnabled. Only allocs marked greedy
-	// (meta.greedy="true") may be evicted, regardless of priority delta and
-	// independently of the other *SchedulerEnabled flags. Skip if the
-	// incoming job is itself greedy to prevent greedy-evicts-greedy thrash.
+	// Greedy-only preemption. Gated on PreemptionConfig.GreedyPreemptionEnabled.
+	// Only allocs marked greedy (meta.greedy="true") may be evicted, regardless
+	// of priority delta and independently of the other *SchedulerEnabled flags.
+	// Skip if the incoming job is itself greedy to prevent greedy-evicts-greedy
+	// thrash. Greedy-only candidates compete directly with the current best
+	// option, but do not add generic preemption score because greedy jobs are
+	// treated as disposable filler.
 	greedyEnabled := schedConfig != nil && schedConfig.PreemptionConfig.GreedyPreemptionEnabled
-	if option == nil && greedyEnabled && !s.job.IsGreedy() {
-		selectOptions.Preempt = false
-		selectOptions.PreemptGreedy = true
-		option = s.stack.Select(tg, selectOptions)
+	if greedyEnabled && !s.job.IsGreedy() {
+		var optionMetrics *structs.AllocMetric
+		if option != nil {
+			optionMetrics = s.ctx.Metrics().Copy()
+		}
+		greedyOptions := copySelectOptions(selectOptions)
+		greedyOptions.Preempt = false
+		greedyOptions.PreemptGreedy = true
+		greedyOption := s.stack.Select(tg, greedyOptions)
+		if useGreedyPreemptionOption(option, greedyOption) {
+			option = greedyOption
+		} else if optionMetrics != nil {
+			s.ctx.metrics = optionMetrics
+		}
 	}
 	return option
+}
+
+func copySelectOptions(options *SelectOptions) *SelectOptions {
+	if options == nil {
+		return &SelectOptions{}
+	}
+	copied := *options
+	return &copied
+}
+
+func useGreedyPreemptionOption(option, greedyOption *RankedNode) bool {
+	if greedyOption == nil || len(greedyOption.PreemptedAllocs) == 0 {
+		return false
+	}
+	return option == nil || greedyOption.FinalScore > option.FinalScore
 }
 
 // handlePreemptions sets relevant preeemption related fields.

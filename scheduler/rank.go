@@ -41,6 +41,11 @@ type RankedNode struct {
 	// PreemptedAllocs is used by the BinpackIterator to identify allocs
 	// that should be preempted in order to make the placement
 	PreemptedAllocs []*structs.Allocation
+
+	// GreedyOnlyPreemption marks an option that came from the greedy-only
+	// preemption pass. These candidates skip the generic preemption scorer so
+	// greedy filler does not add cross-node preemption cost.
+	GreedyOnlyPreemption bool
 }
 
 func (r *RankedNode) GoString() string {
@@ -794,6 +799,7 @@ NEXTNODE:
 		}
 		if len(allocsToPreempt) > 0 {
 			option.PreemptedAllocs = allocsToPreempt
+			option.GreedyOnlyPreemption = iter.evictGreedyOnly
 		}
 
 		// Score the fit normally otherwise
@@ -1084,6 +1090,9 @@ func (iter *PreemptionScoringIterator) Reset() {
 func (iter *PreemptionScoringIterator) Next() *RankedNode {
 	option := iter.source.Next()
 	if option == nil || option.PreemptedAllocs == nil {
+		return option
+	}
+	if option.GreedyOnlyPreemption {
 		return option
 	}
 

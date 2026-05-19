@@ -40,6 +40,37 @@ func TestFeasibleRankIterator(t *testing.T) {
 	}
 }
 
+func TestPreemptionScoringIterator_SkipsGreedyOnlyPreemption(t *testing.T) {
+	ci.Parallel(t)
+
+	_, ctx := testContext(t)
+	alloc := mock.Alloc()
+	alloc.Job.Priority = 50
+
+	t.Run("normal-preemption", func(t *testing.T) {
+		static := NewStaticRankIterator(ctx, []*RankedNode{{
+			Node:            mock.Node(),
+			PreemptedAllocs: []*structs.Allocation{alloc},
+		}})
+		iter := NewPreemptionScoringIterator(ctx, static)
+		out := iter.Next()
+		must.NotNil(t, out)
+		must.Len(t, 1, out.Scores)
+	})
+
+	t.Run("greedy-only-preemption", func(t *testing.T) {
+		static := NewStaticRankIterator(ctx, []*RankedNode{{
+			Node:                 mock.Node(),
+			PreemptedAllocs:      []*structs.Allocation{alloc},
+			GreedyOnlyPreemption: true,
+		}})
+		iter := NewPreemptionScoringIterator(ctx, static)
+		out := iter.Next()
+		must.NotNil(t, out)
+		must.Len(t, 0, out.Scores)
+	})
+}
+
 var (
 	legacyCpuResources1024, processorResources1024 = cpuResources(1024)
 	legacyCpuResources2048, processorResources2048 = cpuResources(2048)

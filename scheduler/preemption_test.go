@@ -1628,8 +1628,9 @@ func enableGreedyPreemption(t *testing.T, h *Harness, extra structs.PreemptionCo
 }
 
 // TestPreemption_Greedy_DeviceEvictionWhenGeneralPreemptionDisabled verifies
-// the third pass: when general preemption is off (default for service jobs),
-// an incoming non-greedy job still evicts a greedy alloc to claim its GPU.
+// greedy-only preemption: when general preemption is off (default for service
+// jobs), an incoming non-greedy job still evicts a greedy alloc to claim its
+// GPU.
 func TestPreemption_Greedy_DeviceEvictionWhenGeneralPreemptionDisabled(t *testing.T) {
 	ci.Parallel(t)
 	h := NewHarness(t)
@@ -1658,9 +1659,9 @@ func TestPreemption_Greedy_DeviceEvictionWhenGeneralPreemptionDisabled(t *testin
 	must.StrContains(t, preempted[0].DesiredDescription, "Greedy alloc evicted")
 }
 
-// TestPreemption_Greedy_DoesNotEvictNonGreedyAllocs verifies the third pass
-// is greedy-only — a non-greedy alloc holding the GPU is left alone and the
-// new job ends up blocked.
+// TestPreemption_Greedy_DoesNotEvictNonGreedyAllocs verifies greedy-only
+// preemption stays greedy-only: a non-greedy alloc holding the GPU is left
+// alone and the new job ends up blocked.
 func TestPreemption_Greedy_DoesNotEvictNonGreedyAllocs(t *testing.T) {
 	ci.Parallel(t)
 	h := NewHarness(t)
@@ -1712,9 +1713,9 @@ func TestPreemption_Greedy_DoesNotEvictWhenIncomingJobIsGreedy(t *testing.T) {
 	}
 }
 
-// TestPreemption_Greedy_IgnoresPriorityDelta verifies the third pass bypasses
-// the priority-delta-of-10 rule — greedy is evictable even when the incoming
-// job has equal or lower priority.
+// TestPreemption_Greedy_IgnoresPriorityDelta verifies greedy-only preemption
+// bypasses the priority-delta-of-10 rule — greedy is evictable even when the
+// incoming job has equal or lower priority.
 func TestPreemption_Greedy_IgnoresPriorityDelta(t *testing.T) {
 	ci.Parallel(t)
 	h := NewHarness(t)
@@ -1740,10 +1741,9 @@ func TestPreemption_Greedy_IgnoresPriorityDelta(t *testing.T) {
 	must.MapContainsKey(t, h.Plans[0].NodePreemptions, node.ID)
 }
 
-// TestPreemption_Greedy_GeneralPreemptionTakesPrecedence verifies ordering of
-// passes: when general preemption is enabled AND there's a delta-eligible
-// non-greedy victim, the general pass wins before greedy mode is even tried.
-func TestPreemption_Greedy_GeneralPreemptionTakesPrecedence(t *testing.T) {
+// TestPreemption_Greedy_GeneralPreemptionCanStillWin verifies that greedy-only
+// preemption does not blindly override a better general-preemption candidate.
+func TestPreemption_Greedy_GeneralPreemptionCanStillWin(t *testing.T) {
 	ci.Parallel(t)
 	h := NewHarness(t)
 
@@ -1768,7 +1768,8 @@ func TestPreemption_Greedy_GeneralPreemptionTakesPrecedence(t *testing.T) {
 	must.NoError(t, h.State.UpsertAllocs(structs.MsgTypeTestSetup, h.NextIndex(), []*structs.Allocation{greedyAlloc, lowAlloc}))
 
 	// New job at priority 50 — delta of 49 vs lowJob makes the non-greedy
-	// alloc preemptible via the general pass. Greedy alloc must be untouched.
+	// alloc preemptible via the general path. In this setup the general
+	// candidate still wins, so the greedy alloc remains untouched.
 	newJob := greedyGPUJob(50, false)
 	runJobEval(t, h, newJob)
 
@@ -1779,10 +1780,53 @@ func TestPreemption_Greedy_GeneralPreemptionTakesPrecedence(t *testing.T) {
 		must.Sprintf("general preemption should evict the low-priority alloc, not the greedy one"))
 }
 
+// TestPreemption_Greedy_PreferredPreemptionBeatsFreeNode verifies that greedy
+// preemption competes with normal placement: a higher-scoring node occupied by
+// a greedy alloc can win over a lower-scoring free node.
+func TestPreemption_Greedy_PreferredPreemptionBeatsFreeNode(t *testing.T) {
+	ci.Parallel(t)
+	h := NewHarness(t)
+
+	preferredNode := greedyGPUNode(t, 1)
+	preferredNode.Meta["preferred"] = "true"
+	freeNode := greedyGPUNode(t, 1)
+	freeNode.Meta["preferred"] = "false"
+	must.NoError(t, h.State.UpsertNode(structs.MsgTypeTestSetup, h.NextIndex(), preferredNode))
+	must.NoError(t, h.State.UpsertNode(structs.MsgTypeTestSetup, h.NextIndex(), freeNode))
+	enableGreedyPreemption(t, h, structs.PreemptionConfig{ServiceSchedulerEnabled: true})
+
+	greedyJob := greedyGPUJob(1, true)
+	must.NoError(t, h.State.UpsertJob(structs.MsgTypeTestSetup, h.NextIndex(), nil, greedyJob))
+	greedyAlloc := createAllocWithDevice(uuid.Generate(), greedyJob, greedyJob.TaskGroups[0].Tasks[0].Resources,
+		&structs.AllocatedDeviceResource{Type: "gpu", Vendor: "nvidia", Name: "1080ti", DeviceIDs: []string{"dev0"}})
+	greedyAlloc.NodeID = preferredNode.ID
+	must.NoError(t, h.State.UpsertAllocs(structs.MsgTypeTestSetup, h.NextIndex(), []*structs.Allocation{greedyAlloc}))
+
+	newJob := greedyGPUJob(100, false)
+	newJob.TaskGroups[0].Affinities = structs.Affinities{{
+		LTarget: "${meta.preferred}",
+		RTarget: "true",
+		Operand: "=",
+		Weight:  100,
+	}}
+	runJobEval(t, h, newJob)
+
+	must.Len(t, 1, h.Plans)
+	plan := h.Plans[0]
+	must.MapContainsKey(t, plan.NodePreemptions, preferredNode.ID)
+	must.Len(t, 1, plan.NodePreemptions[preferredNode.ID])
+	must.Eq(t, greedyAlloc.ID, plan.NodePreemptions[preferredNode.ID][0].ID)
+	must.MapContainsKey(t, plan.NodeAllocation, preferredNode.ID)
+	must.Len(t, 1, plan.NodeAllocation[preferredNode.ID])
+	must.Eq(t, newJob.ID, plan.NodeAllocation[preferredNode.ID][0].JobID)
+	must.Eq(t, 0, len(plan.NodeAllocation[freeNode.ID]),
+		must.Sprintf("free node should not be used when preferred greedy preemption scores higher"))
+}
+
 // TestPreemption_Greedy_DisabledByConfig verifies that when
-// PreemptionConfig.GreedyPreemptionEnabled is false (default), the third pass
-// does not fire and a greedy alloc is left alone — even when no other
-// preemption mode is enabled.
+// PreemptionConfig.GreedyPreemptionEnabled is false (default), greedy-only
+// preemption does not fire and a greedy alloc is left alone — even when no
+// other preemption mode is enabled.
 func TestPreemption_Greedy_DisabledByConfig(t *testing.T) {
 	ci.Parallel(t)
 	h := NewHarness(t)
