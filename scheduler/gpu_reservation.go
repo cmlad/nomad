@@ -14,7 +14,7 @@ const (
 	gpuReservedMemoryExhaustion = "gpu reserved memory"
 )
 
-func taskGroupUsesGPU(tg *structs.TaskGroup) bool {
+func taskGroupRequestsGPUDevice(tg *structs.TaskGroup) bool {
 	if tg == nil {
 		return false
 	}
@@ -25,6 +25,9 @@ func taskGroupUsesGPU(tg *structs.TaskGroup) bool {
 		}
 
 		for _, device := range task.Resources.Devices {
+			if device == nil {
+				continue
+			}
 			id := device.ID()
 			if id != nil && id.Type == gpuDeviceType {
 				return true

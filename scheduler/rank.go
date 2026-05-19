@@ -180,6 +180,7 @@ type BinPackIterator struct {
 	binpackScoreWeight        float64
 	deviceAffinityScoreWeight float64
 	taskGroupUsesGPU          bool
+	taskGroupRequestsGPU      bool
 	gpuResourceReservation    structs.SchedulerGPUResourceReservation
 }
 
@@ -209,6 +210,7 @@ func (iter *BinPackIterator) SetJob(job *structs.Job) {
 func (iter *BinPackIterator) SetTaskGroup(taskGroup *structs.TaskGroup) {
 	iter.taskGroup = taskGroup
 	iter.taskGroupUsesGPU = taskGroupUsesGPU(taskGroup)
+	iter.taskGroupRequestsGPU = taskGroupRequestsGPUDevice(taskGroup)
 
 	// When binpacking is enabled, override to use spread for jobs without a GPU or
 	// with specific GPUs
@@ -340,7 +342,7 @@ NEXTNODE:
 
 		var allocsToPreempt []*structs.Allocation
 
-		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+		if !iter.taskGroupRequestsGPU && !iter.gpuResourceReservation.IsZero() {
 			if exhausted, dim := gpuReservationCannotCompute(option.Node, proposed, iter.gpuResourceReservation); exhausted {
 				netIdx.Release()
 				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
@@ -871,7 +873,7 @@ NEXTNODE:
 
 		// Add the resources we are trying to fit
 		proposed = append(proposed, &structs.Allocation{AllocatedResources: total})
-		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+		if !iter.taskGroupRequestsGPU && !iter.gpuResourceReservation.IsZero() {
 			if exhausted, dim := gpuReservationCannotCompute(option.Node, proposed, iter.gpuResourceReservation); exhausted {
 				netIdx.Release()
 				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
@@ -974,7 +976,7 @@ NEXTNODE:
 				continue
 			}
 		}
-		if !iter.taskGroupUsesGPU && !iter.gpuResourceReservation.IsZero() {
+		if !iter.taskGroupRequestsGPU && !iter.gpuResourceReservation.IsZero() {
 			finalAllocs := current
 			if len(allocsToPreempt) > 0 {
 				finalAllocs = structs.RemoveAllocs(finalAllocs, allocsToPreempt)

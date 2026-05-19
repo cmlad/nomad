@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/shoenig/test"
 	"github.com/shoenig/test/must"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServiceSched_JobRegister(t *testing.T) {
