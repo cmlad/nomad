@@ -209,6 +209,8 @@ func (iter *BinPackIterator) SetJob(job *structs.Job) {
 
 func (iter *BinPackIterator) SetTaskGroup(taskGroup *structs.TaskGroup) {
 	iter.taskGroup = taskGroup
+	// Keep the legacy name-based GPU predicate for release-branch scoring
+	// behavior, but use parsed device type for the reservation policy.
 	iter.taskGroupUsesGPU = taskGroupUsesGPU(taskGroup)
 	iter.taskGroupRequestsGPU = taskGroupRequestsGPUDevice(taskGroup)
 
@@ -873,13 +875,6 @@ NEXTNODE:
 
 		// Add the resources we are trying to fit
 		proposed = append(proposed, &structs.Allocation{AllocatedResources: total})
-		if !iter.taskGroupRequestsGPU && !iter.gpuResourceReservation.IsZero() {
-			if exhausted, dim := gpuReservationCannotCompute(option.Node, proposed, iter.gpuResourceReservation); exhausted {
-				netIdx.Release()
-				iter.ctx.Metrics().ExhaustedNode(option.Node, dim)
-				continue
-			}
-		}
 
 		// Compute fit and the util used for scoring.
 		//

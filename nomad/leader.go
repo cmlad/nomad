@@ -2606,9 +2606,9 @@ func (s *Server) getOrCreateSchedulerConfig() *structs.SchedulerConfiguration {
 	if !defaultSchedulerConfig.GPUResourceReservation.IsZero() &&
 		!ServersMeetMinimumVersion(s.Members(), s.Region(), minGPUResourceReservationVersion, false) {
 		s.logger.Named("core").Warn(
-			"initializing scheduler config without GPU resource reservation until all servers are above minimum version",
+			"can't initialize scheduler config with GPU resource reservation until all servers are above minimum version",
 			"min_version", minGPUResourceReservationVersion)
-		defaultSchedulerConfig.GPUResourceReservation = structs.SchedulerGPUResourceReservation{}
+		return nil
 	}
 
 	req := structs.SchedulerSetConfigRequest{Config: defaultSchedulerConfig}

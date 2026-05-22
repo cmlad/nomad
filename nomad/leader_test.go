@@ -1823,15 +1823,11 @@ func TestServer_getOrCreateSchedulerConfig_GPUResourceReservationVersionGate(t *
 	defer cleanupFn()
 	testutil.WaitForLeader(t, testServer.RPC)
 
-	require.NotNil(t, testServer.getOrCreateSchedulerConfig())
+	require.Nil(t, testServer.getOrCreateSchedulerConfig())
 
 	_, config, err := testServer.State().SchedulerConfig()
 	require.NoError(t, err)
-	require.NotNil(t, config)
-	require.Equal(t, structs.SchedulerAlgorithmSpread, config.SchedulerAlgorithm)
-	require.True(t, config.MemoryOversubscriptionEnabled)
-	require.True(t, config.PauseEvalBroker)
-	require.True(t, config.GPUResourceReservation.IsZero())
+	require.Nil(t, config)
 }
 
 func TestServer_handleEvalBrokerStateChange(t *testing.T) {
