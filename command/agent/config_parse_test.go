@@ -160,8 +160,13 @@ var basicConfig = &Config{
 				GreedyPreemptionEnabled: true,
 			},
 			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-				CPUCores: 2,
-				MemoryMB: 16384,
+				DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+					{
+						Selector: "nvidia/gpu/a100",
+						CPUCores: 4,
+						MemoryMB: 65536,
+					},
+				},
 			},
 		},
 		LicensePath:        "/tmp/nomad.hclic",

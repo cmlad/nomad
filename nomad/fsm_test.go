@@ -2577,8 +2577,15 @@ func TestFSM_SnapshotRestore_SchedulerConfiguration(t *testing.T) {
 			SystemSchedulerEnabled: true,
 		},
 		GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-			CPUCores: 1,
-			MemoryMB: 16384,
+			DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+				{
+					Vendor:   "nvidia",
+					Type:     "gpu",
+					Name:     "a100",
+					CPUCores: 2,
+					MemoryMB: 32768,
+				},
+			},
 		},
 	}
 	schedConfig.Canonicalize()
@@ -3036,8 +3043,15 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 				BatchSchedulerEnabled:  true,
 			},
 			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-				CPUCores: 2,
-				MemoryMB: 32768,
+				DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+					{
+						Vendor:   "nvidia",
+						Type:     "gpu",
+						Name:     "l40",
+						CPUCores: 3,
+						MemoryMB: 49152,
+					},
+				},
 			},
 		},
 	}

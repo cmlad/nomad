@@ -5,7 +5,6 @@ package command
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/cli"
@@ -37,8 +36,6 @@ type OperatorSchedulerSetConfig struct {
 	preemptSysBatchScheduler    flagHelper.BoolValue
 	preemptSystemScheduler      flagHelper.BoolValue
 	preemptGreedy               flagHelper.BoolValue
-	gpuReservedCPUCores         settableIntValue
-	gpuReservedMemoryMB         settableIntValue
 }
 
 func (o *OperatorSchedulerSetConfig) AutocompleteFlags() complete.Flags {
@@ -60,8 +57,6 @@ func (o *OperatorSchedulerSetConfig) AutocompleteFlags() complete.Flags {
 			"-preempt-sysbatch-scheduler":      complete.PredictSet("true", "false"),
 			"-preempt-system-scheduler":        complete.PredictSet("true", "false"),
 			"-preempt-greedy":                  complete.PredictSet("true", "false"),
-			"-gpu-reserved-cpu-cores":          complete.PredictAnything,
-			"-gpu-reserved-memory-mb":          complete.PredictAnything,
 		},
 	)
 }
@@ -91,8 +86,6 @@ func (o *OperatorSchedulerSetConfig) Run(args []string) int {
 	flags.Var(&o.preemptSysBatchScheduler, "preempt-sysbatch-scheduler", "")
 	flags.Var(&o.preemptSystemScheduler, "preempt-system-scheduler", "")
 	flags.Var(&o.preemptGreedy, "preempt-greedy", "")
-	flags.Var(&o.gpuReservedCPUCores, "gpu-reserved-cpu-cores", "")
-	flags.Var(&o.gpuReservedMemoryMB, "gpu-reserved-memory-mb", "")
 
 	if err := flags.Parse(args); err != nil {
 		return 1
@@ -161,8 +154,6 @@ func (o *OperatorSchedulerSetConfig) Run(args []string) int {
 	o.preemptSysBatchScheduler.Merge(&schedulerConfig.PreemptionConfig.SysBatchSchedulerEnabled)
 	o.preemptSystemScheduler.Merge(&schedulerConfig.PreemptionConfig.SystemSchedulerEnabled)
 	o.preemptGreedy.Merge(&schedulerConfig.PreemptionConfig.GreedyPreemptionEnabled)
-	o.gpuReservedCPUCores.Merge(&schedulerConfig.GPUResourceReservation.CPUCores)
-	o.gpuReservedMemoryMB.Merge(&schedulerConfig.GPUResourceReservation.MemoryMB)
 
 	// Check-and-set the new configuration.
 	result, _, err := client.Operator().SchedulerCASConfiguration(schedulerConfig, nil)
@@ -261,46 +252,6 @@ Scheduler Set Config Options:
     needs their resources, regardless of priority delta and independently of
     the other -preempt-*-scheduler flags. Only fires for service and batch
     jobs.
-
-  -gpu-reserved-cpu-cores=<int>
-    Specifies the CPU cores to reserve for each healthy unallocated GPU on a
-    node. CPU-only jobs will not be placed if they would consume this reserved
-    CPU capacity. Set to 0 to disable CPU reservation.
-
-  -gpu-reserved-memory-mb=<int>
-    Specifies the memory, in MB, to reserve for each healthy unallocated GPU on
-    a node. CPU-only jobs will not be placed if they would consume this reserved
-    memory capacity. Set to 0 to disable memory reservation.
 `
 	return strings.TrimSpace(helpText)
-}
-
-type settableIntValue struct {
-	v *int
-}
-
-func (i *settableIntValue) Merge(onto *int) {
-	if i.v != nil {
-		*onto = *i.v
-	}
-}
-
-func (i *settableIntValue) Set(v string) error {
-	parsed, err := strconv.Atoi(v)
-	if err != nil {
-		return fmt.Errorf("must be a non-negative integer: %w", err)
-	}
-	if parsed < 0 {
-		return fmt.Errorf("must be a non-negative integer")
-	}
-
-	i.v = &parsed
-	return nil
-}
-
-func (i *settableIntValue) String() string {
-	if i.v == nil {
-		return "0"
-	}
-	return fmt.Sprintf("%d", *i.v)
 }

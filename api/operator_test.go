@@ -69,8 +69,15 @@ func TestOperator_SchedulerSetConfiguration(t *testing.T) {
 			GreedyPreemptionEnabled:  true,
 		},
 		GPUResourceReservation: SchedulerGPUResourceReservation{
-			CPUCores: 1,
-			MemoryMB: 16384,
+			DeviceReservations: []SchedulerGPUResourceReservationDevice{
+				{
+					Vendor:   "nvidia",
+					Type:     "gpu",
+					Name:     "a100",
+					CPUCores: 2,
+					MemoryMB: 32768,
+				},
+			},
 		},
 		MemoryOversubscriptionEnabled: true,
 		RejectJobRegistration:         true,

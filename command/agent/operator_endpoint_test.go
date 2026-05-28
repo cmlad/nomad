@@ -499,8 +499,15 @@ func TestOperator_SchedulerSetConfiguration(t *testing.T) {
   "BinpackScoreWeight": 0.5,
   "DeviceAffinityScoreWeight": 0,
   "GPUResourceReservation": {
-    "CPUCores": 2,
-    "MemoryMB": 16384
+    "DeviceReservations": [
+      {
+        "Vendor": "nvidia",
+        "Type": "gpu",
+        "Name": "a100",
+        "CPUCores": 4,
+        "MemoryMB": 65536
+      }
+    ]
   },
   "MemoryOversubscriptionEnabled": true,
   "PauseEvalBroker": true,
@@ -535,8 +542,15 @@ func TestOperator_SchedulerSetConfiguration(t *testing.T) {
 		require.Equal(t, 0.5, reply.SchedulerConfig.EffectiveBinpackScoreWeight())
 		require.Equal(t, 0.0, reply.SchedulerConfig.EffectiveDeviceAffinityScoreWeight())
 		require.Equal(t, structs.SchedulerGPUResourceReservation{
-			CPUCores: 2,
-			MemoryMB: 16384,
+			DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+				{
+					Vendor:   "nvidia",
+					Type:     "gpu",
+					Name:     "a100",
+					CPUCores: 4,
+					MemoryMB: 65536,
+				},
+			},
 		}, reply.SchedulerConfig.GPUResourceReservation)
 		require.True(t, reply.SchedulerConfig.MemoryOversubscriptionEnabled)
 		require.True(t, reply.SchedulerConfig.PauseEvalBroker)
@@ -549,7 +563,12 @@ func TestOperator_SchedulerSetConfiguration_GPUResourceReservationValidation(t *
 		body := bytes.NewBuffer([]byte(`
 {
   "GPUResourceReservation": {
-    "CPUCores": -1
+    "DeviceReservations": [
+      {
+        "Type": "gpu",
+        "CPUCores": -1
+      }
+    ]
   }
 }`))
 		req, _ := http.NewRequest(http.MethodPut, "/v1/operator/scheduler/configuration", body)

@@ -287,8 +287,18 @@ type PreemptionConfig struct {
 }
 
 // SchedulerGPUResourceReservation configures how much CPU and memory capacity
-// the scheduler protects for each healthy unallocated GPU on a node.
+// the scheduler protects for healthy unallocated GPUs on a node.
 type SchedulerGPUResourceReservation struct {
+	DeviceReservations []SchedulerGPUResourceReservationDevice
+}
+
+// SchedulerGPUResourceReservationDevice configures a reservation rule for
+// GPUs matching the given device tuple. Empty Type implies gpu.
+type SchedulerGPUResourceReservationDevice struct {
+	Selector string
+	Vendor   string
+	Type     string
+	Name     string
 	CPUCores int
 	MemoryMB int
 }

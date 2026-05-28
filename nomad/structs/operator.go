@@ -284,6 +284,16 @@ func (s *SchedulerConfiguration) Copy() *SchedulerConfiguration {
 	if s.DeviceAffinityScoreWeight != nil {
 		ns.DeviceAffinityScoreWeight = pointer.Of(*s.DeviceAffinityScoreWeight)
 	}
+	if s.GPUResourceReservation.DeviceReservations != nil {
+		ns.GPUResourceReservation.DeviceReservations = make([]*SchedulerGPUResourceReservationDevice, len(s.GPUResourceReservation.DeviceReservations))
+		for i, device := range s.GPUResourceReservation.DeviceReservations {
+			if device == nil {
+				continue
+			}
+			copied := *device
+			ns.GPUResourceReservation.DeviceReservations[i] = &copied
+		}
+	}
 	return &ns
 }
 
@@ -390,22 +400,70 @@ func (s *SchedulerConfiguration) Validate() error {
 }
 
 // SchedulerGPUResourceReservation configures how much CPU and memory capacity
-// the scheduler protects for each healthy unallocated GPU on a node.
+// the scheduler protects for healthy unallocated GPUs on a node.
 type SchedulerGPUResourceReservation struct {
-	CPUCores int `hcl:"cpu_cores"`
-	MemoryMB int `hcl:"memory_mb"`
+	DeviceReservations []*SchedulerGPUResourceReservationDevice `hcl:"device"`
+}
+
+// SchedulerGPUResourceReservationDevice configures a reservation rule for
+// GPUs matching the given device tuple. Empty Type implies gpu.
+type SchedulerGPUResourceReservationDevice struct {
+	Selector string `hcl:",key"`
+	Vendor   string `hcl:"vendor"`
+	Type     string `hcl:"type"`
+	Name     string `hcl:"name"`
+	CPUCores int    `hcl:"cpu_cores"`
+	MemoryMB int    `hcl:"memory_mb"`
+}
+
+func (r *SchedulerGPUResourceReservationDevice) ID() *DeviceIdTuple {
+	if r == nil {
+		return nil
+	}
+	if r.Selector != "" {
+		return (&RequestedDevice{Name: r.Selector}).ID()
+	}
+	deviceType := r.Type
+	if deviceType == "" {
+		deviceType = "gpu"
+	}
+	return &DeviceIdTuple{
+		Vendor: r.Vendor,
+		Type:   deviceType,
+		Name:   r.Name,
+	}
 }
 
 func (r SchedulerGPUResourceReservation) IsZero() bool {
-	return r.CPUCores == 0 && r.MemoryMB == 0
+	return len(r.DeviceReservations) == 0
 }
 
 func (r SchedulerGPUResourceReservation) Validate() error {
-	if r.CPUCores < 0 {
-		return fmt.Errorf("gpu resource reservation cpu cores must be greater than or equal to zero")
-	}
-	if r.MemoryMB < 0 {
-		return fmt.Errorf("gpu resource reservation memory MB must be greater than or equal to zero")
+	seen := make(map[DeviceIdTuple]struct{}, len(r.DeviceReservations))
+	for _, device := range r.DeviceReservations {
+		if device == nil {
+			continue
+		}
+		if device.Selector != "" && (device.Vendor != "" || device.Type != "" || device.Name != "") {
+			return fmt.Errorf("gpu resource reservation device must use selector or vendor/type/name, not both")
+		}
+		if device.Type != "" && device.Type != "gpu" {
+			return fmt.Errorf("gpu resource reservation device type must be gpu")
+		}
+		id := device.ID()
+		if id == nil || id.Type != "gpu" {
+			return fmt.Errorf("gpu resource reservation device type must be gpu")
+		}
+		if device.CPUCores < 0 {
+			return fmt.Errorf("gpu resource reservation device cpu cores must be greater than or equal to zero")
+		}
+		if device.MemoryMB < 0 {
+			return fmt.Errorf("gpu resource reservation device memory MB must be greater than or equal to zero")
+		}
+		if _, ok := seen[*id]; ok {
+			return fmt.Errorf("duplicate gpu resource reservation device for %s", id.String())
+		}
+		seen[*id] = struct{}{}
 	}
 	return nil
 }

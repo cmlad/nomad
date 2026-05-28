@@ -237,15 +237,13 @@ func (iter *BinPackIterator) SetSchedulerConfiguration(schedConfig *structs.Sche
 	}
 	iter.scoreFit = scoreFn
 
-	// Set memory oversubscription.
-	iter.memoryOversubscription = schedConfig != nil && schedConfig.MemoryOversubscriptionEnabled
-
+	// Effective* helpers are nil-safe; direct fields need explicit defaults.
 	iter.binpackScoreWeight = schedConfig.EffectiveBinpackScoreWeight()
 	iter.deviceAffinityScoreWeight = schedConfig.EffectiveDeviceAffinityScoreWeight()
-
-	// Set GPU resource reservation.
+	iter.memoryOversubscription = false
 	iter.gpuResourceReservation = structs.SchedulerGPUResourceReservation{}
 	if schedConfig != nil {
+		iter.memoryOversubscription = schedConfig.MemoryOversubscriptionEnabled
 		iter.gpuResourceReservation = schedConfig.GPUResourceReservation
 	}
 }
@@ -976,6 +974,8 @@ NEXTNODE:
 			if len(allocsToPreempt) > 0 {
 				finalAllocs = structs.RemoveAllocs(finalAllocs, allocsToPreempt)
 			}
+			// Synthetic pending allocs have no client status; resource accounting
+			// treats the empty status as non-terminal, matching proposed allocs.
 			finalAllocs = append(finalAllocs, &structs.Allocation{AllocatedResources: total})
 
 			if violated, dim := gpuReservationViolated(option.Node, finalAllocs, iter.gpuResourceReservation); violated {

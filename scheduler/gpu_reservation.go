@@ -14,6 +14,12 @@ const (
 	gpuReservedMemoryExhaustion = "gpu reserved memory"
 )
 
+type gpuReservationRequirement struct {
+	cpuCores int
+	memoryMB int64
+	freeGPUs int
+}
+
 func taskGroupRequestsGPUDevice(tg *structs.TaskGroup) bool {
 	if tg == nil {
 		return false
@@ -38,27 +44,127 @@ func taskGroupRequestsGPUDevice(tg *structs.TaskGroup) bool {
 	return false
 }
 
+// AllocationUsesGPUDevice reports whether an allocation has an assigned GPU
+// device. It is used by the plan applier, where the task group request is no
+// longer the most direct source of truth.
+func AllocationUsesGPUDevice(alloc *structs.Allocation) bool {
+	if alloc == nil || alloc.AllocatedResources == nil {
+		return false
+	}
+
+	for _, task := range alloc.AllocatedResources.Tasks {
+		if task == nil {
+			continue
+		}
+		for _, device := range task.Devices {
+			if device == nil {
+				continue
+			}
+			id := device.ID()
+			if id != nil && id.Type == gpuDeviceType {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// AllocationsContainCPUOnlyPlacement reports whether a placement set includes
+// any non-terminal allocation that does not use a GPU device.
+func AllocationsContainCPUOnlyPlacement(allocs []*structs.Allocation) bool {
+	for _, alloc := range allocs {
+		if alloc == nil || alloc.ClientTerminalStatus() {
+			continue
+		}
+		if !AllocationUsesGPUDevice(alloc) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func remainingHealthyGPUCount(node *structs.Node, allocs []*structs.Allocation) int {
+	return gpuReservationRequired(node, allocs, structs.SchedulerGPUResourceReservation{}).freeGPUs
+}
+
+func gpuReservationRequired(
+	node *structs.Node,
+	allocs []*structs.Allocation,
+	cfg structs.SchedulerGPUResourceReservation,
+) gpuReservationRequirement {
+	var required gpuReservationRequirement
 	if node == nil || node.NodeResources == nil {
-		return 0
+		return required
 	}
 
 	accounter := structs.NewDeviceAccounter(node)
 	accounter.AddAllocs(allocs)
 
-	var free int
 	for id, device := range accounter.Devices {
 		if id.Type != gpuDeviceType {
 			continue
 		}
+		reservation := gpuReservationForDevice(id, cfg)
 		for _, uses := range device.Instances {
 			if uses == 0 {
-				free++
+				required.freeGPUs++
+				required.cpuCores += reservation.CPUCores
+				required.memoryMB += int64(reservation.MemoryMB)
 			}
 		}
 	}
 
-	return free
+	return required
+}
+
+func gpuReservationForDevice(
+	id structs.DeviceIdTuple,
+	cfg structs.SchedulerGPUResourceReservation,
+) structs.SchedulerGPUResourceReservationDevice {
+	reservation := structs.SchedulerGPUResourceReservationDevice{
+		Type: gpuDeviceType,
+	}
+	bestSpecificity := -1
+
+	for _, deviceReservation := range cfg.DeviceReservations {
+		if deviceReservation == nil {
+			continue
+		}
+		ruleID := deviceReservation.ID()
+		if !id.Matches(ruleID) {
+			continue
+		}
+		specificity := gpuReservationDeviceSpecificity(deviceReservation)
+		if specificity > bestSpecificity {
+			bestSpecificity = specificity
+			reservation = *deviceReservation
+		}
+	}
+
+	return reservation
+}
+
+func gpuReservationDeviceSpecificity(reservation *structs.SchedulerGPUResourceReservationDevice) int {
+	if reservation == nil {
+		return 0
+	}
+	id := reservation.ID()
+	if id == nil {
+		return 0
+	}
+	var specificity int
+	if id.Vendor != "" {
+		specificity++
+	}
+	if id.Type != "" {
+		specificity++
+	}
+	if id.Name != "" {
+		specificity++
+	}
+	return specificity
 }
 
 func gpuReservationCPUShares(
@@ -96,20 +202,30 @@ func gpuReservationViolated(
 	finalAllocs []*structs.Allocation,
 	cfg structs.SchedulerGPUResourceReservation,
 ) (bool, string) {
+	return GPUReservationViolated(node, finalAllocs, cfg)
+}
+
+// GPUReservationViolated reports whether the final allocation set consumes
+// CPU or memory capacity reserved for remaining healthy free GPUs.
+func GPUReservationViolated(
+	node *structs.Node,
+	finalAllocs []*structs.Allocation,
+	cfg structs.SchedulerGPUResourceReservation,
+) (bool, string) {
 	if cfg.IsZero() {
 		return false, ""
 	}
 
-	freeGPUs := remainingHealthyGPUCount(node, finalAllocs)
-	if freeGPUs == 0 {
+	required := gpuReservationRequired(node, finalAllocs, cfg)
+	if required.cpuCores == 0 && required.memoryMB == 0 {
 		return false, ""
 	}
 
 	used := gpuReservationResourcesUsed(finalAllocs)
 
-	if cfg.CPUCores > 0 {
+	if required.cpuCores > 0 {
 		available := gpuReservationAvailableComparable(node)
-		reservedCPU := gpuReservationCPUShares(node, available, cfg.CPUCores, freeGPUs)
+		reservedCPU := gpuReservationCPUShares(node, available, required.cpuCores, 1)
 		if reservedCPU < 0 {
 			return true, gpuReservedCPUExhaustion
 		}
@@ -120,15 +236,14 @@ func gpuReservationViolated(
 		}
 	}
 
-	if cfg.MemoryMB > 0 {
+	if required.memoryMB > 0 {
 		availableMemory, ok := gpuReservationAvailableMemoryMB(node)
 		if !ok {
 			return true, gpuReservedMemoryExhaustion
 		}
 
-		reservedMemory := int64(cfg.MemoryMB * freeGPUs)
 		remainingMemory := availableMemory - used.Flattened.Memory.MemoryMB
-		if remainingMemory < reservedMemory {
+		if remainingMemory < required.memoryMB {
 			return true, gpuReservedMemoryExhaustion
 		}
 	}
@@ -141,13 +256,14 @@ func gpuReservationCannotCompute(
 	finalAllocs []*structs.Allocation,
 	cfg structs.SchedulerGPUResourceReservation,
 ) (bool, string) {
-	if cfg.IsZero() || remainingHealthyGPUCount(node, finalAllocs) == 0 {
+	if cfg.IsZero() {
 		return false, ""
 	}
 
-	if cfg.CPUCores > 0 {
+	required := gpuReservationRequired(node, finalAllocs, cfg)
+	if required.cpuCores > 0 {
 		available := gpuReservationAvailableComparable(node)
-		if gpuReservationCPUShares(node, available, cfg.CPUCores, 1) < 0 {
+		if gpuReservationCPUShares(node, available, required.cpuCores, 1) < 0 {
 			return true, gpuReservedCPUExhaustion
 		}
 	}

@@ -107,6 +107,7 @@ func TestSchedulerConfiguration_WithNodePool(t *testing.T) {
 		})
 	}
 }
+
 func TestSchedulerConfiguration_ScoreWeights(t *testing.T) {
 	ci.Parallel(t)
 
@@ -158,18 +159,64 @@ func TestSchedulerConfiguration_Validate_GPUResourceReservation(t *testing.T) {
 		config *SchedulerConfiguration
 	}{
 		{
-			name: "negative cpu",
+			name: "negative device cpu",
 			config: &SchedulerConfiguration{
 				GPUResourceReservation: SchedulerGPUResourceReservation{
-					CPUCores: -1,
+					DeviceReservations: []*SchedulerGPUResourceReservationDevice{
+						{
+							Vendor:   "nvidia",
+							Name:     "a100",
+							CPUCores: -1,
+						},
+					},
 				},
 			},
 		},
 		{
-			name: "negative memory",
+			name: "negative device memory",
 			config: &SchedulerConfiguration{
 				GPUResourceReservation: SchedulerGPUResourceReservation{
-					MemoryMB: -1,
+					DeviceReservations: []*SchedulerGPUResourceReservationDevice{
+						{
+							Vendor:   "nvidia",
+							Name:     "a100",
+							MemoryMB: -1,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "non gpu device type",
+			config: &SchedulerConfiguration{
+				GPUResourceReservation: SchedulerGPUResourceReservation{
+					DeviceReservations: []*SchedulerGPUResourceReservationDevice{
+						{
+							Type:     "fpga",
+							CPUCores: 1,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "duplicate device",
+			config: &SchedulerConfiguration{
+				GPUResourceReservation: SchedulerGPUResourceReservation{
+					DeviceReservations: []*SchedulerGPUResourceReservationDevice{
+						{
+							Vendor:   "nvidia",
+							Type:     "gpu",
+							Name:     "a100",
+							CPUCores: 1,
+						},
+						{
+							Vendor:   "nvidia",
+							Type:     "gpu",
+							Name:     "a100",
+							MemoryMB: 1024,
+						},
+					},
 				},
 			},
 		},
@@ -183,8 +230,15 @@ func TestSchedulerConfiguration_Validate_GPUResourceReservation(t *testing.T) {
 
 	valid := &SchedulerConfiguration{
 		GPUResourceReservation: SchedulerGPUResourceReservation{
-			CPUCores: 1,
-			MemoryMB: 16384,
+			DeviceReservations: []*SchedulerGPUResourceReservationDevice{
+				{
+					Vendor:   "nvidia",
+					Type:     "gpu",
+					Name:     "a100",
+					CPUCores: 2,
+					MemoryMB: 32768,
+				},
+			},
 		},
 	}
 	must.NoError(t, valid.Validate())

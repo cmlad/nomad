@@ -603,8 +603,15 @@ func TestOperator_SchedulerSetConfiguration_GPUResourceReservation(t *testing.T)
 	arg := structs.SchedulerSetConfigRequest{
 		Config: structs.SchedulerConfiguration{
 			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-				CPUCores: 1,
-				MemoryMB: 16384,
+				DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+					{
+						Vendor:   "nvidia",
+						Type:     "gpu",
+						Name:     "a100",
+						CPUCores: 2,
+						MemoryMB: 32768,
+					},
+				},
 			},
 		},
 	}
@@ -637,7 +644,12 @@ func TestOperator_SchedulerSetConfiguration_GPUResourceReservationValidation(t *
 	arg := structs.SchedulerSetConfigRequest{
 		Config: structs.SchedulerConfiguration{
 			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-				MemoryMB: -1,
+				DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+					{
+						Type:     "gpu",
+						MemoryMB: -1,
+					},
+				},
 			},
 		},
 	}
@@ -646,7 +658,7 @@ func TestOperator_SchedulerSetConfiguration_GPUResourceReservationValidation(t *
 	var setResponse structs.SchedulerSetConfigurationResponse
 	err := msgpackrpc.CallWithCodec(rpcCodec, "Operator.SchedulerSetConfiguration", &arg, &setResponse)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "gpu resource reservation memory MB")
+	require.Contains(t, err.Error(), "gpu resource reservation device memory MB")
 }
 
 func TestOperator_SchedulerSetConfiguration_GPUResourceReservationVersionGate(t *testing.T) {
@@ -662,7 +674,12 @@ func TestOperator_SchedulerSetConfiguration_GPUResourceReservationVersionGate(t 
 	arg := structs.SchedulerSetConfigRequest{
 		Config: structs.SchedulerConfiguration{
 			GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-				CPUCores: 1,
+				DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+					{
+						Type:     "gpu",
+						CPUCores: 1,
+					},
+				},
 			},
 		},
 	}

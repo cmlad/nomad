@@ -172,8 +172,10 @@ server {
     }
 
     gpu_resource_reservation {
-      cpu_cores = 2
-      memory_mb = 16384
+      device "nvidia/gpu/a100" {
+        cpu_cores = 4
+        memory_mb = 65536
+      }
     }
   }
 

@@ -1120,7 +1120,12 @@ func TestServiceSched_GPUResourceReservationAvoidsGPUNode(t *testing.T) {
 	require.NoError(t, h.State.SchedulerSetConfig(h.NextIndex(), &structs.SchedulerConfiguration{
 		SchedulerAlgorithm: structs.SchedulerAlgorithmBinpack,
 		GPUResourceReservation: structs.SchedulerGPUResourceReservation{
-			CPUCores: 1,
+			DeviceReservations: []*structs.SchedulerGPUResourceReservationDevice{
+				{
+					Type:     "gpu",
+					CPUCores: 1,
+				},
+			},
 		},
 	}))
 
