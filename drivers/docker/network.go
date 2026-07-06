@@ -75,7 +75,7 @@ func (d *Driver) CreateNetwork(allocID string, createSpec *drivers.NetworkCreate
 		return nil, false, err
 	}
 
-	if err = d.startContainer(*container); err != nil {
+	if err = d.startContainer(*container, containerapi.StartOptions{}); err != nil {
 		return nil, false, err
 	}
 

@@ -94,6 +94,27 @@ The `docker` driver supports the following configuration in the job spec. Only
   purge a container if during task creation Nomad encounters an existing one in
   non-running state for the same task. Defaults to `5`.
 
+- `checkpoint_restore` - (Optional) Restore the container process from a Docker
+  checkpoint when starting the task. The Docker daemon on the client must support
+  checkpoint/restore, and any `checkpoint_dir` value is interpreted as a host path
+  in the Docker daemon's filesystem namespace.
+
+  ```hcl
+  config {
+    image = "redis:7"
+
+    checkpoint_restore {
+      checkpoint_id  = "checkpoint-1"
+      checkpoint_dir = "/var/lib/docker-checkpoints/redis"
+    }
+  }
+  ```
+
+  The `checkpoint_restore` block supports:
+
+  - `checkpoint_id` - (Required) The checkpoint name to pass to Docker.
+  - `checkpoint_dir` - (Optional) The host directory containing the checkpoint.
+
 - `dns_search_domains` - (Optional) A list of DNS search domains for
   the container to use. If you are using bridge networking mode with a
   `network` block in the task group, you must set all DNS options in

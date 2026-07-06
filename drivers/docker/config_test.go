@@ -36,6 +36,27 @@ func TestConfig_ParseHCL(t *testing.T) {
 				CPUCFSPeriod: 100000,
 			},
 		},
+		{
+			"checkpoint restore",
+			`config {
+				image = "redis:7"
+				checkpoint_restore {
+					checkpoint_id = "checkpoint-1"
+					checkpoint_dir = "/var/lib/fal/checkpoints/runner"
+				}
+				}`,
+			&TaskConfig{
+				Image: "redis:7",
+				CheckpointRestore: DockerCheckpointRestore{
+					CheckpointID:  "checkpoint-1",
+					CheckpointDir: "/var/lib/fal/checkpoints/runner",
+				},
+				Devices:      []DockerDevice{},
+				Mounts:       []DockerMount{},
+				MountsList:   []DockerMount{},
+				CPUCFSPeriod: 100000,
+			},
+		},
 	}
 
 	parser := hclutils.NewConfigParser(taskConfigSpec)
@@ -104,6 +125,21 @@ func TestConfig_ParseJSON(t *testing.T) {
 				CPUCFSPeriod: 100000,
 			},
 		},
+		{
+			name:  "checkpoint restore",
+			input: `{"Config": {"image": "bash:3", "checkpoint_restore": {"checkpoint_id": "checkpoint-1", "checkpoint_dir": "/var/lib/fal/checkpoints/runner"}}}`,
+			expected: TaskConfig{
+				Image: "bash:3",
+				CheckpointRestore: DockerCheckpointRestore{
+					CheckpointID:  "checkpoint-1",
+					CheckpointDir: "/var/lib/fal/checkpoints/runner",
+				},
+				Mounts:       []DockerMount{},
+				MountsList:   []DockerMount{},
+				Devices:      []DockerDevice{},
+				CPUCFSPeriod: 100000,
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -115,6 +151,30 @@ func TestConfig_ParseJSON(t *testing.T) {
 			require.Equal(t, c.expected, tc)
 		})
 	}
+}
+
+func TestDockerCheckpointRestore_StartOptions(t *testing.T) {
+	ci.Parallel(t)
+
+	restore := DockerCheckpointRestore{
+		CheckpointID:  "checkpoint-1",
+		CheckpointDir: "/var/lib/fal/checkpoints/runner",
+	}
+
+	opts := restore.startOptions()
+	require.Equal(t, "checkpoint-1", opts.CheckpointID)
+	require.Equal(t, "/var/lib/fal/checkpoints/runner", opts.CheckpointDir)
+}
+
+func TestDockerCheckpointRestore_ValidateRequiresCheckpointID(t *testing.T) {
+	ci.Parallel(t)
+
+	restore := DockerCheckpointRestore{
+		CheckpointDir: "/var/lib/fal/checkpoints/runner",
+	}
+
+	err := restore.validate()
+	require.ErrorContains(t, err, "checkpoint_restore.checkpoint_id must be set")
 }
 
 func TestConfig_PortMap_Deserialization(t *testing.T) {
@@ -212,8 +272,12 @@ func TestConfig_ParseAllHCL(t *testing.T) {
 		Command:                 "/bin/bash",
 		ContainerExistsAttempts: 10,
 		CgroupnsMode:            "host",
-		CPUHardLimit:            true,
-		CPUCFSPeriod:            20,
+		CheckpointRestore: DockerCheckpointRestore{
+			CheckpointID:  "checkpoint-1",
+			CheckpointDir: "/var/lib/fal/checkpoints/runner",
+		},
+		CPUHardLimit: true,
+		CPUCFSPeriod: 20,
 		Devices: []DockerDevice{
 			{
 				HostPath:          "/dev/null",

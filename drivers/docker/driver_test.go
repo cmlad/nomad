@@ -452,7 +452,7 @@ func TestDockerDriver_ContainerAlreadyExists(t *testing.T) {
 	must.NoError(t, err)
 	defer client.ContainerRemove(ctx, c.ID, containerapi.RemoveOptions{Force: true})
 
-	must.NoError(t, d.startContainer(*c))
+	must.NoError(t, d.startContainer(*c, containerapi.StartOptions{}))
 	_, _, err = d.StartTask(task)
 	must.NoError(t, err)
 	d.DestroyTask(task.ID, true)
@@ -3056,8 +3056,8 @@ func TestDockerDriver_CreationIdempotent(t *testing.T) {
 	}
 
 	// now start container twice
-	must.NoError(t, d.startContainer(*c2))
-	must.NoError(t, d.startContainer(*c2))
+	must.NoError(t, d.startContainer(*c2, containerapi.StartOptions{}))
+	must.NoError(t, d.startContainer(*c2, containerapi.StartOptions{}))
 
 	tu.WaitForResult(func() (bool, error) {
 		c, err := client.ContainerInspect(ctx, c2.ID)

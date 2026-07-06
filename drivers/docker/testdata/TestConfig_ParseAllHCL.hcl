@@ -19,6 +19,10 @@ config {
   command                   = "/bin/bash"
   container_exists_attempts = 10
   cgroupns                  = "host"
+  checkpoint_restore {
+    checkpoint_id  = "checkpoint-1"
+    checkpoint_dir = "/var/lib/fal/checkpoints/runner"
+  }
   cpu_hard_limit            = true
   cpu_cfs_period            = 20
   devices = [

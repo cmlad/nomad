@@ -356,6 +356,13 @@ var (
 		"disable": hclspec.NewAttr("disable", "bool", false),
 	})
 
+	// checkpointRestoreBodySpec is the hcl specification for the
+	// `checkpoint_restore` block.
+	checkpointRestoreBodySpec = hclspec.NewObject(map[string]*hclspec.Spec{
+		"checkpoint_id":  hclspec.NewAttr("checkpoint_id", "string", true),
+		"checkpoint_dir": hclspec.NewAttr("checkpoint_dir", "string", false),
+	})
+
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
@@ -372,6 +379,8 @@ var (
 		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
 		"cgroupns":       hclspec.NewAttr("cgroupns", "string", false),
+		"checkpoint_restore": hclspec.NewBlock(
+			"checkpoint_restore", false, checkpointRestoreBodySpec),
 		"command":        hclspec.NewAttr("command", "string", false),
 		"cpuset_cpus":    hclspec.NewAttr("cpuset_cpus", "string", false),
 		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
@@ -455,66 +464,93 @@ var (
 )
 
 type TaskConfig struct {
-	Image                   string             `codec:"image"`
-	AdvertiseIPv6Addr       bool               `codec:"advertise_ipv6_address"`
-	Args                    []string           `codec:"args"`
-	Auth                    DockerAuth         `codec:"auth"`
-	AuthSoftFail            bool               `codec:"auth_soft_fail"`
-	CapAdd                  []string           `codec:"cap_add"`
-	CapDrop                 []string           `codec:"cap_drop"`
-	CgroupnsMode            string             `codec:"cgroupns"`
-	Command                 string             `codec:"command"`
-	ContainerExistsAttempts uint64             `codec:"container_exists_attempts"`
-	CPUCFSPeriod            int64              `codec:"cpu_cfs_period"`
-	CPUHardLimit            bool               `codec:"cpu_hard_limit"`
-	CPUSetCPUs              string             `codec:"cpuset_cpus"`
-	Devices                 []DockerDevice     `codec:"devices"`
-	DNSSearchDomains        []string           `codec:"dns_search_domains"`
-	DNSOptions              []string           `codec:"dns_options"`
-	DNSServers              []string           `codec:"dns_servers"`
-	Entrypoint              []string           `codec:"entrypoint"`
-	ExtraHosts              []string           `codec:"extra_hosts"`
-	ForcePull               bool               `codec:"force_pull"`
-	GroupAdd                []string           `codec:"group_add"`
-	Healthchecks            DockerHealthchecks `codec:"healthchecks"`
-	Hostname                string             `codec:"hostname"`
-	Init                    bool               `codec:"init"`
-	Interactive             bool               `codec:"interactive"`
-	IPCMode                 string             `codec:"ipc_mode"`
-	IPv4Address             string             `codec:"ipv4_address"`
-	IPv6Address             string             `codec:"ipv6_address"`
-	Isolation               string             `codec:"isolation"`
-	Labels                  hclutils.MapStrStr `codec:"labels"`
-	LoadImage               string             `codec:"load"`
-	Logging                 DockerLogging      `codec:"logging"`
-	MacAddress              string             `codec:"mac_address"`
-	MemoryHardLimit         int64              `codec:"memory_hard_limit"`
-	Mounts                  []DockerMount      `codec:"mount"`
-	NetworkAliases          []string           `codec:"network_aliases"`
-	NetworkMode             string             `codec:"network_mode"`
-	OOMScoreAdj             int                `codec:"oom_score_adj"`
-	Runtime                 string             `codec:"runtime"`
-	PidsLimit               int64              `codec:"pids_limit"`
-	PidMode                 string             `codec:"pid_mode"`
-	Ports                   []string           `codec:"ports"`
-	PortMap                 hclutils.MapStrInt `codec:"port_map"`
-	Privileged              bool               `codec:"privileged"`
-	ImagePullTimeout        string             `codec:"image_pull_timeout"`
-	ReadonlyRootfs          bool               `codec:"readonly_rootfs"`
-	SecurityOpt             []string           `codec:"security_opt"`
-	ShmSize                 int64              `codec:"shm_size"`
-	StorageOpt              map[string]string  `codec:"storage_opt"`
-	Sysctl                  hclutils.MapStrStr `codec:"sysctl"`
-	TTY                     bool               `codec:"tty"`
-	Ulimit                  hclutils.MapStrStr `codec:"ulimit"`
-	UTSMode                 string             `codec:"uts_mode"`
-	UsernsMode              string             `codec:"userns_mode"`
-	Volumes                 []string           `codec:"volumes"`
-	VolumeDriver            string             `codec:"volume_driver"`
-	WorkDir                 string             `codec:"work_dir"`
+	Image                   string                  `codec:"image"`
+	AdvertiseIPv6Addr       bool                    `codec:"advertise_ipv6_address"`
+	Args                    []string                `codec:"args"`
+	Auth                    DockerAuth              `codec:"auth"`
+	AuthSoftFail            bool                    `codec:"auth_soft_fail"`
+	CapAdd                  []string                `codec:"cap_add"`
+	CapDrop                 []string                `codec:"cap_drop"`
+	CgroupnsMode            string                  `codec:"cgroupns"`
+	CheckpointRestore       DockerCheckpointRestore `codec:"checkpoint_restore"`
+	Command                 string                  `codec:"command"`
+	ContainerExistsAttempts uint64                  `codec:"container_exists_attempts"`
+	CPUCFSPeriod            int64                   `codec:"cpu_cfs_period"`
+	CPUHardLimit            bool                    `codec:"cpu_hard_limit"`
+	CPUSetCPUs              string                  `codec:"cpuset_cpus"`
+	Devices                 []DockerDevice          `codec:"devices"`
+	DNSSearchDomains        []string                `codec:"dns_search_domains"`
+	DNSOptions              []string                `codec:"dns_options"`
+	DNSServers              []string                `codec:"dns_servers"`
+	Entrypoint              []string                `codec:"entrypoint"`
+	ExtraHosts              []string                `codec:"extra_hosts"`
+	ForcePull               bool                    `codec:"force_pull"`
+	GroupAdd                []string                `codec:"group_add"`
+	Healthchecks            DockerHealthchecks      `codec:"healthchecks"`
+	Hostname                string                  `codec:"hostname"`
+	Init                    bool                    `codec:"init"`
+	Interactive             bool                    `codec:"interactive"`
+	IPCMode                 string                  `codec:"ipc_mode"`
+	IPv4Address             string                  `codec:"ipv4_address"`
+	IPv6Address             string                  `codec:"ipv6_address"`
+	Isolation               string                  `codec:"isolation"`
+	Labels                  hclutils.MapStrStr      `codec:"labels"`
+	LoadImage               string                  `codec:"load"`
+	Logging                 DockerLogging           `codec:"logging"`
+	MacAddress              string                  `codec:"mac_address"`
+	MemoryHardLimit         int64                   `codec:"memory_hard_limit"`
+	Mounts                  []DockerMount           `codec:"mount"`
+	NetworkAliases          []string                `codec:"network_aliases"`
+	NetworkMode             string                  `codec:"network_mode"`
+	OOMScoreAdj             int                     `codec:"oom_score_adj"`
+	Runtime                 string                  `codec:"runtime"`
+	PidsLimit               int64                   `codec:"pids_limit"`
+	PidMode                 string                  `codec:"pid_mode"`
+	Ports                   []string                `codec:"ports"`
+	PortMap                 hclutils.MapStrInt      `codec:"port_map"`
+	Privileged              bool                    `codec:"privileged"`
+	ImagePullTimeout        string                  `codec:"image_pull_timeout"`
+	ReadonlyRootfs          bool                    `codec:"readonly_rootfs"`
+	SecurityOpt             []string                `codec:"security_opt"`
+	ShmSize                 int64                   `codec:"shm_size"`
+	StorageOpt              map[string]string       `codec:"storage_opt"`
+	Sysctl                  hclutils.MapStrStr      `codec:"sysctl"`
+	TTY                     bool                    `codec:"tty"`
+	Ulimit                  hclutils.MapStrStr      `codec:"ulimit"`
+	UTSMode                 string                  `codec:"uts_mode"`
+	UsernsMode              string                  `codec:"userns_mode"`
+	Volumes                 []string                `codec:"volumes"`
+	VolumeDriver            string                  `codec:"volume_driver"`
+	WorkDir                 string                  `codec:"work_dir"`
 
 	// MountsList supports the pre-1.0 mounts array syntax
 	MountsList []DockerMount `codec:"mounts"`
+}
+
+type DockerCheckpointRestore struct {
+	CheckpointID  string `codec:"checkpoint_id"`
+	CheckpointDir string `codec:"checkpoint_dir"`
+}
+
+func (r DockerCheckpointRestore) enabled() bool {
+	return r.CheckpointID != "" || r.CheckpointDir != ""
+}
+
+func (r DockerCheckpointRestore) validate() error {
+	if r.CheckpointDir != "" && r.CheckpointID == "" {
+		return fmt.Errorf("checkpoint_restore.checkpoint_id must be set when checkpoint_restore.checkpoint_dir is set")
+	}
+	if r.enabled() && runtime.GOOS == "windows" {
+		return fmt.Errorf("checkpoint_restore is not supported on windows")
+	}
+	return nil
+}
+
+func (r DockerCheckpointRestore) startOptions() containerapi.StartOptions {
+	return containerapi.StartOptions{
+		CheckpointID:  r.CheckpointID,
+		CheckpointDir: r.CheckpointDir,
+	}
 }
 
 type DockerAuth struct {

@@ -341,6 +341,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required for docker driver")
 	}
 
+	if err := driverConfig.CheckpointRestore.validate(); err != nil {
+		return nil, nil, err
+	}
+
 	driverConfig.Image = strings.TrimPrefix(driverConfig.Image, "https://")
 
 	driverConfig.ImagePullTimeout = getValue(driverConfig.ImagePullTimeout, d.config.ImagePullTimeout)
@@ -407,7 +411,7 @@ CREATE:
 
 	if !container.State.Running {
 		// Start the container
-		if err := d.startContainer(*container); err != nil {
+		if err := d.startContainer(*container, driverConfig.CheckpointRestore.startOptions()); err != nil {
 			d.logger.Error("failed to start container", "container_id", container.ID, "error", err)
 			dockerClient.ContainerRemove(d.ctx, container.ID, containerapi.RemoveOptions{Force: true})
 			// Some sort of docker race bug, recreating the container usually works
@@ -580,7 +584,7 @@ CREATE:
 
 // startContainer starts the passed container. It attempts to handle any
 // transient Docker errors.
-func (d *Driver) startContainer(c types.ContainerJSON) error {
+func (d *Driver) startContainer(c types.ContainerJSON, startOptions containerapi.StartOptions) error {
 	dockerClient, err := d.getDockerClient()
 	if err != nil {
 		return err
@@ -590,8 +594,8 @@ func (d *Driver) startContainer(c types.ContainerJSON) error {
 	var backoff time.Duration
 
 START:
-	startErr := dockerClient.ContainerStart(d.ctx, c.ID, containerapi.StartOptions{})
-	if startErr == nil || errdefs.IsConflict(err) {
+	startErr := dockerClient.ContainerStart(d.ctx, c.ID, startOptions)
+	if startErr == nil || errdefs.IsConflict(startErr) {
 		return nil
 	}
 
