@@ -955,6 +955,9 @@ func TestHTTP_VerifyHTTPSClient_AfterConfigReload(t *testing.T) {
 	)
 
 	agentConfig := &Config{
+		Telemetry: &Telemetry{
+			collectionInterval: time.Second,
+		},
 		TLSConfig: &config.TLSConfig{
 			EnableHTTP:        true,
 			VerifyHTTPSClient: true,
@@ -965,6 +968,9 @@ func TestHTTP_VerifyHTTPSClient_AfterConfigReload(t *testing.T) {
 	}
 
 	newConfig := &Config{
+		Telemetry: &Telemetry{
+			collectionInterval: time.Second,
+		},
 		TLSConfig: &config.TLSConfig{
 			EnableHTTP:        true,
 			VerifyHTTPSClient: true,
