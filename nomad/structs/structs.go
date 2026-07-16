@@ -9862,16 +9862,17 @@ func (ta *TaskArtifact) validateChecksum() error {
 }
 
 const (
-	ConstraintDistinctProperty  = "distinct_property"
-	ConstraintDistinctHosts     = "distinct_hosts"
-	ConstraintRegex             = "regexp"
-	ConstraintVersion           = "version"
-	ConstraintSemver            = "semver"
-	ConstraintSetContains       = "set_contains"
-	ConstraintSetContainsAll    = "set_contains_all"
-	ConstraintSetContainsAny    = "set_contains_any"
-	ConstraintAttributeIsSet    = "is_set"
-	ConstraintAttributeIsNotSet = "is_not_set"
+	ConstraintDistinctProperty     = "distinct_property"
+	ConstraintDistinctHosts        = "distinct_hosts"
+	ConstraintRegex                = "regexp"
+	ConstraintVersion              = "version"
+	ConstraintSemver               = "semver"
+	ConstraintSetContains          = "set_contains"
+	ConstraintSetContainsAll       = "set_contains_all"
+	ConstraintSetContainsAny       = "set_contains_any"
+	ConstraintMissingOrContainsAny = "missing_or_contains_any"
+	ConstraintAttributeIsSet       = "is_set"
+	ConstraintAttributeIsNotSet    = "is_not_set"
 )
 
 // A Constraint is used to restrict placement options.
@@ -9918,7 +9919,7 @@ func (c *Constraint) Validate() error {
 	switch c.Operand {
 	case ConstraintDistinctHosts:
 		requireLtarget = false
-	case ConstraintSetContainsAll, ConstraintSetContainsAny, ConstraintSetContains:
+	case ConstraintSetContainsAll, ConstraintSetContainsAny, ConstraintSetContains, ConstraintMissingOrContainsAny:
 		if c.RTarget == "" {
 			mErr.Errors = append(mErr.Errors, fmt.Errorf("Set contains constraint requires an RTarget"))
 		}
@@ -9993,7 +9994,7 @@ SETEQUALS:
 type Affinity struct {
 	LTarget string // Left-hand target
 	RTarget string // Right-hand target
-	Operand string // Affinity operand (<=, <, =, !=, >, >=), set_contains_all, set_contains_any
+	Operand string // Affinity operand (<=, <, =, !=, >, >=), set_contains_all, set_contains_any, missing_or_contains_any
 	Weight  int8   // Weight applied to nodes that match the affinity. Can be negative
 }
 
@@ -10039,7 +10040,7 @@ func (a *Affinity) Validate() error {
 
 	// Perform additional validation based on operand
 	switch a.Operand {
-	case ConstraintSetContainsAll, ConstraintSetContainsAny, ConstraintSetContains:
+	case ConstraintSetContainsAll, ConstraintSetContainsAny, ConstraintSetContains, ConstraintMissingOrContainsAny:
 		if a.RTarget == "" {
 			mErr.Errors = append(mErr.Errors, fmt.Errorf("Set contains operators require an RTarget"))
 		}

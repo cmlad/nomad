@@ -1254,12 +1254,20 @@ func (iter *NodeAffinityIterator) Next() *RankedNode {
 
 func matchesAffinity(ctx Context, affinity *structs.Affinity, option *structs.Node) bool {
 	//TODO(preetha): Add a step here that filters based on computed node class for potential speedup
+	operand := affinity.Operand
+	// COMPAT(infra-4010): Legacy r:value taint affinities were stored with
+	// set_contains_any. Remove this bridge after operators emit
+	// missing_or_contains_any and legacy jobs have been replaced.
+	if affinity.LTarget == "${meta.t-r}" && operand == structs.ConstraintSetContainsAny {
+		operand = structs.ConstraintMissingOrContainsAny
+	}
+
 	// Resolve the targets
 	lVal, lOk := resolveTarget(affinity.LTarget, option)
 	rVal, rOk := resolveTarget(affinity.RTarget, option)
 
 	// Check if satisfied
-	return checkAffinity(ctx, affinity.Operand, lVal, rVal, lOk, rOk)
+	return checkAffinity(ctx, operand, lVal, rVal, lOk, rOk)
 }
 
 // ScoreNormalizationIterator is used to combine scores from various prior

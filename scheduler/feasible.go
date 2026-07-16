@@ -993,6 +993,11 @@ func checkConstraint(ctx ConstraintContext, operand string, lVal, rVal interface
 		return lFound && rFound && checkSetContainsAll(lVal, rVal)
 	case structs.ConstraintSetContainsAny:
 		return lFound && rFound && checkSetContainsAny(lVal, rVal)
+	case structs.ConstraintMissingOrContainsAny:
+		if !lFound {
+			return true
+		}
+		return rFound && checkSetContainsAny(lVal, rVal)
 	default:
 		return false
 	}
@@ -1650,6 +1655,21 @@ func checkAttributeConstraint(ctx ConstraintContext, operand string, lVal, rVal 
 		return checkSetContainsAll(ls, rs)
 	case structs.ConstraintSetContainsAny:
 		if !(lFound && rFound) {
+			return false
+		}
+
+		ls, ok := lVal.GetString()
+		rs, ok2 := rVal.GetString()
+		if !ok || !ok2 {
+			return false
+		}
+
+		return checkSetContainsAny(ls, rs)
+	case structs.ConstraintMissingOrContainsAny:
+		if !lFound {
+			return true
+		}
+		if !rFound {
 			return false
 		}
 
