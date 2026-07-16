@@ -3666,12 +3666,16 @@ func TestConstraint_Validate(t *testing.T) {
 	}
 
 	// Perform set_contains* validation
+	c.LTarget = "${meta.foo}"
 	c.RTarget = ""
-	for _, o := range []string{ConstraintSetContains, ConstraintSetContainsAll, ConstraintSetContainsAny} {
+	for _, o := range []string{ConstraintSetContains, ConstraintSetContainsAll, ConstraintSetContainsAny, ConstraintMissingOrContainsAny} {
 		c.Operand = o
 		err = c.Validate()
 		require.Error(t, err, "requires an RTarget")
 	}
+	c.Operand = ConstraintMissingOrContainsAny
+	c.RTarget = "foo"
+	require.NoError(t, c.Validate())
 
 	// Perform LTarget validation
 	c.Operand = ConstraintRegex
@@ -3772,6 +3776,15 @@ func TestAffinity_Validate(t *testing.T) {
 			}
 		})
 	}
+
+	a := &Affinity{
+		LTarget: "${meta.foo}",
+		Operand: ConstraintMissingOrContainsAny,
+		Weight:  10,
+	}
+	require.Error(t, a.Validate(), "missing_or_contains_any requires an RTarget")
+	a.RTarget = "foo"
+	require.NoError(t, a.Validate())
 }
 
 func TestUpdateStrategy_Validate(t *testing.T) {

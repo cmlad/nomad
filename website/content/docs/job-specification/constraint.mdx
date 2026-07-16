@@ -87,6 +87,7 @@ allocations.
   regexp
   set_contains
   set_contains_any
+  missing_or_contains_any
   version
   semver
   is_set
@@ -199,6 +200,19 @@ constraint {
     attribute = "..."
     operator  = "set_contains_any"
     value     = "a,b,c"
+  }
+  ```
+
+- `"missing_or_contains_any"` - Matches when the attribute is not present, or
+  when its comma-separated value contains any element from the comma-separated
+  `value`. If the attribute is present, `value` must resolve to a string and at
+  least one element must match. The `value` field is required.
+
+  ```hcl
+  constraint {
+    attribute = "${meta.workload-types}"
+    operator  = "missing_or_contains_any"
+    value     = "service,batch"
   }
   ```
 

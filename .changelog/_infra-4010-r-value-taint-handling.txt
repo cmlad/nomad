@@ -1,0 +1,3 @@
+```release-note:bug
+scheduler: add the `missing_or_contains_any` placement operator and temporarily apply its unset-attribute behavior to legacy `${meta.t-r}` affinities stored with `set_contains_any`
+```

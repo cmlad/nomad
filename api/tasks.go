@@ -227,7 +227,7 @@ func (r *ReschedulePolicy) Canonicalize(jobType string) {
 type Affinity struct {
 	LTarget string `hcl:"attribute,optional"` // Left-hand target
 	RTarget string `hcl:"value,optional"`     // Right-hand target
-	Operand string `hcl:"operator,optional"`  // Constraint operand (<=, <, =, !=, >, >=), set_contains_all, set_contains_any
+	Operand string `hcl:"operator,optional"`  // Constraint operand (<=, <, =, !=, >, >=), set_contains_all, set_contains_any, missing_or_contains_any
 	Weight  *int8  `hcl:"weight,optional"`    // Weight applied to nodes that match the affinity. Can be negative
 }
 

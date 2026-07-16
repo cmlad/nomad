@@ -1351,6 +1351,33 @@ func TestConstraintChecker(t *testing.T) {
 	}
 }
 
+func TestConstraintChecker_MissingOrContainsAny(t *testing.T) {
+	ci.Parallel(t)
+
+	_, ctx := testContext(t)
+	missing := mock.Node()
+	tolerated := mock.Node()
+	untolerated := mock.Node()
+	delete(missing.Meta, "t-r")
+	tolerated.Meta["t-r"] = "batch,service"
+	untolerated.Meta["t-r"] = "system"
+
+	constraint := &structs.Constraint{
+		LTarget: "${meta.t-r}",
+		RTarget: "service,sysbatch",
+		Operand: structs.ConstraintMissingOrContainsAny,
+	}
+	checker := NewConstraintChecker(ctx, []*structs.Constraint{constraint})
+
+	must.True(t, checker.Feasible(missing))
+	must.True(t, checker.Feasible(tolerated))
+	must.False(t, checker.Feasible(untolerated))
+
+	// The legacy compatibility behavior is affinity-only.
+	constraint.Operand = structs.ConstraintSetContainsAny
+	must.False(t, checker.Feasible(missing))
+}
+
 func TestResolveConstraintTarget(t *testing.T) {
 	ci.Parallel(t)
 
@@ -1562,6 +1589,80 @@ func TestCheckConstraint(t *testing.T) {
 		if res := checkConstraint(ctx, tc.op, tc.lVal, tc.rVal, tc.lVal != nil, tc.rVal != nil); res != tc.result {
 			t.Fatalf("TC: %#v, Result: %v", tc, res)
 		}
+	}
+}
+
+func TestCheckConstraint_MissingOrContainsAny(t *testing.T) {
+	ci.Parallel(t)
+
+	cases := []struct {
+		name           string
+		operand        string
+		lVal, rVal     interface{}
+		lFound, rFound bool
+		expected       bool
+	}{
+		{
+			name:     "missing left",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			rVal:     "service",
+			rFound:   true,
+			expected: true,
+		},
+		{
+			name:     "both missing",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			expected: true,
+		},
+		{
+			name:     "present empty left",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     "",
+			rVal:     "service",
+			lFound:   true,
+			rFound:   true,
+			expected: false,
+		},
+		{
+			name:     "contains any",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     "batch, service",
+			rVal:     "service,sysbatch",
+			lFound:   true,
+			rFound:   true,
+			expected: true,
+		},
+		{
+			name:     "contains none",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     "batch,system",
+			rVal:     "service,sysbatch",
+			lFound:   true,
+			rFound:   true,
+			expected: false,
+		},
+		{
+			name:     "present left missing right",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     "service",
+			lFound:   true,
+			expected: false,
+		},
+		{
+			name:     "set_contains_any still rejects missing left",
+			operand:  structs.ConstraintSetContainsAny,
+			rVal:     "service",
+			rFound:   true,
+			expected: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ctx := testContext(t)
+			actual := checkConstraint(ctx, tc.operand, tc.lVal, tc.rVal, tc.lFound, tc.rFound)
+			must.Eq(t, tc.expected, actual)
+		})
 	}
 }
 
@@ -3555,5 +3656,88 @@ func TestCheckAttributeConstraint(t *testing.T) {
 		if res := checkAttributeConstraint(ctx, tc.op, tc.lVal, tc.rVal, tc.lVal != nil, tc.rVal != nil); res != tc.result {
 			t.Fatalf("TC: %#v, Result: %v", tc, res)
 		}
+	}
+}
+
+func TestCheckAttributeConstraint_MissingOrContainsAny(t *testing.T) {
+	ci.Parallel(t)
+
+	cases := []struct {
+		name           string
+		operand        string
+		lVal, rVal     *psstructs.Attribute
+		lFound, rFound bool
+		expected       bool
+	}{
+		{
+			name:     "missing left",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			rVal:     psstructs.NewStringAttribute("service"),
+			rFound:   true,
+			expected: true,
+		},
+		{
+			name:     "both missing",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			expected: true,
+		},
+		{
+			name:     "present empty left",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     psstructs.NewStringAttribute(""),
+			rVal:     psstructs.NewStringAttribute("service"),
+			lFound:   true,
+			rFound:   true,
+			expected: false,
+		},
+		{
+			name:     "contains any",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     psstructs.NewStringAttribute("batch, service"),
+			rVal:     psstructs.NewStringAttribute("service,sysbatch"),
+			lFound:   true,
+			rFound:   true,
+			expected: true,
+		},
+		{
+			name:     "contains none",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     psstructs.NewStringAttribute("batch,system"),
+			rVal:     psstructs.NewStringAttribute("service,sysbatch"),
+			lFound:   true,
+			rFound:   true,
+			expected: false,
+		},
+		{
+			name:     "present left missing right",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     psstructs.NewStringAttribute("service"),
+			lFound:   true,
+			expected: false,
+		},
+		{
+			name:     "set_contains_any still rejects missing left",
+			operand:  structs.ConstraintSetContainsAny,
+			rVal:     psstructs.NewStringAttribute("service"),
+			rFound:   true,
+			expected: false,
+		},
+		{
+			name:     "present non-string left",
+			operand:  structs.ConstraintMissingOrContainsAny,
+			lVal:     psstructs.NewIntAttribute(1, ""),
+			rVal:     psstructs.NewStringAttribute("service"),
+			lFound:   true,
+			rFound:   true,
+			expected: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ctx := testContext(t)
+			actual := checkAttributeConstraint(ctx, tc.operand, tc.lVal, tc.rVal, tc.lFound, tc.rFound)
+			must.Eq(t, tc.expected, actual)
+		})
 	}
 }

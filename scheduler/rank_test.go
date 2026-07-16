@@ -3191,6 +3191,111 @@ func TestNodeAffinityIterator(t *testing.T) {
 	})
 }
 
+func TestNodeAffinityIterator_MissingOrContainsAny(t *testing.T) {
+	ci.Parallel(t)
+
+	cases := []struct {
+		name    string
+		operand string
+	}{
+		{
+			name:    "direct operand",
+			operand: structs.ConstraintMissingOrContainsAny,
+		},
+		{
+			name:    "legacy r-value operand",
+			operand: structs.ConstraintSetContainsAny,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ctx := testContext(t)
+			missing := &RankedNode{Node: mock.Node()}
+			tolerated := &RankedNode{Node: mock.Node()}
+			untolerated := &RankedNode{Node: mock.Node()}
+			delete(missing.Node.Meta, "t-r")
+			tolerated.Node.Meta["t-r"] = "batch, service"
+			untolerated.Node.Meta["t-r"] = "system"
+
+			affinity := &structs.Affinity{
+				LTarget: "${meta.t-r}",
+				RTarget: "service,sysbatch",
+				Operand: tc.operand,
+				Weight:  100,
+			}
+			static := NewStaticRankIterator(ctx, []*RankedNode{missing, tolerated, untolerated})
+			iter := NewNodeAffinityIterator(ctx, static)
+			iter.SetTaskGroup(&structs.TaskGroup{Affinities: []*structs.Affinity{affinity}})
+
+			out := collectRanked(iter)
+			must.Eq(t, 1.0, out[0].Scores[0])
+			must.Eq(t, 1.0, out[1].Scores[0])
+			must.Eq(t, 0.0, out[2].Scores[0])
+			must.Eq(t, tc.operand, affinity.Operand)
+		})
+	}
+}
+
+func TestMatchesAffinity_LegacyRValueCompatibilityScope(t *testing.T) {
+	ci.Parallel(t)
+
+	_, ctx := testContext(t)
+	node := mock.Node()
+	delete(node.Meta, "t-r")
+
+	cases := []struct {
+		name     string
+		affinity *structs.Affinity
+		expected bool
+	}{
+		{
+			name: "exact legacy affinity",
+			affinity: &structs.Affinity{
+				LTarget: "${meta.t-r}",
+				RTarget: "service",
+				Operand: structs.ConstraintSetContainsAny,
+			},
+			expected: true,
+		},
+		{
+			name: "different metadata target",
+			affinity: &structs.Affinity{
+				LTarget: "${meta.other}",
+				RTarget: "service",
+				Operand: structs.ConstraintSetContainsAny,
+			},
+			expected: false,
+		},
+		{
+			name: "different target case",
+			affinity: &structs.Affinity{
+				LTarget: "${meta.T-R}",
+				RTarget: "service",
+				Operand: structs.ConstraintSetContainsAny,
+			},
+			expected: false,
+		},
+		{
+			name: "different operand",
+			affinity: &structs.Affinity{
+				LTarget: "${meta.t-r}",
+				RTarget: "service",
+				Operand: structs.ConstraintSetContainsAll,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalOperand := tc.affinity.Operand
+			must.Eq(t, tc.expected, matchesAffinity(ctx, tc.affinity, node))
+			must.Eq(t, originalOperand, tc.affinity.Operand)
+		})
+	}
+}
+
 // TestTaskGroupUsesGPU tests the GPU detection helper function
 func TestTaskGroupUsesGPU(t *testing.T) {
 	tests := []struct {
