@@ -1391,6 +1391,7 @@ func TestDockerDriver_CreateContainerConfig_Mounts(t *testing.T) {
 		"alloc:/alloc:z",
 		"redis-demo/local:/local:z",
 		"redis-demo/secrets:/secrets:z",
+		"alloc/logs:/alloc/logs:ro,z",
 		"/etc/ssl/certs:/etc/ssl/certs:ro,z",
 		"/var/www:/srv/www:z",
 	}, cc.Host.Binds)
@@ -1468,6 +1469,7 @@ func TestDockerDriver_CreateContainerConfig_Mounts_Windows(t *testing.T) {
 		`alloc:c:/alloc`,
 		`redis-demo\local:c:/local`,
 		`redis-demo\secrets:c:/secrets`,
+		`alloc/logs:c:/alloc/logs:ro`,
 		`c:\etc\ssl\certs:c:/etc/ssl/certs`,
 		`c:\var\www:c:/srv/www`,
 	}, cc.Host.Binds)
