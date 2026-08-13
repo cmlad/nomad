@@ -264,6 +264,11 @@ func (t *TaskEnv) WithTask(alloc *structs.Allocation, task *structs.Task) *TaskE
 
 	combined := alloc.Job.CombinedTaskMeta(alloc.TaskGroup, task.Name)
 	for k, v := range combined {
+		// Annotation keys are control-plane bookkeeping and are never
+		// exposed to the task environment.
+		if structs.IsAnnotationMetaKey(k) {
+			continue
+		}
 		newT.EnvMap[fmt.Sprintf("%s%s", MetaPrefix, strings.ToUpper(k))] = v
 		newT.EnvMap[fmt.Sprintf("%s%s", MetaPrefix, k)] = v
 	}
@@ -795,6 +800,11 @@ func (b *Builder) setAlloc(alloc *structs.Allocation) *Builder {
 	}
 
 	for k, v := range combined {
+		// Annotation keys are control-plane bookkeeping and are never
+		// exposed to the task environment.
+		if structs.IsAnnotationMetaKey(k) {
+			continue
+		}
 		b.taskMeta[fmt.Sprintf("%s%s", MetaPrefix, strings.ToUpper(k))] = v
 		b.taskMeta[fmt.Sprintf("%s%s", MetaPrefix, k)] = v
 	}

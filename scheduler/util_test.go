@@ -327,6 +327,28 @@ func TestTasksUpdated(t *testing.T) {
 	j18.Meta["j18_test"] = "roll_baby_roll"
 	must.True(t, tasksUpdated(j1, j18, name).modified)
 
+	// Annotation meta keys (containing '/') are not exposed to the task
+	// environment, so changing them at any scope does not require a
+	// destructive update
+	j33 := mock.Job()
+	j33.Meta["example.com/foo"] = "a"
+	must.False(t, tasksUpdated(j1, j33, name).modified)
+
+	j34 := mock.Job()
+	j34.TaskGroups[0].Meta["example.com/foo"] = "a"
+	must.False(t, tasksUpdated(j1, j34, name).modified)
+
+	j35 := mock.Job()
+	j35.TaskGroups[0].Tasks[0].Meta["example.com/foo"] = "a"
+	must.False(t, tasksUpdated(j1, j35, name).modified)
+
+	// A runtime meta change alongside an annotation change is still
+	// destructive
+	j36 := mock.Job()
+	j36.Meta["example.com/foo"] = "a"
+	j36.Meta["j18_test"] = "roll_baby_roll"
+	must.True(t, tasksUpdated(j1, j36, name).modified)
+
 	// Change network mode
 	j19 := mock.Job()
 	j19.TaskGroups[0].Networks[0].Mode = "bridge"

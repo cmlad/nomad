@@ -745,6 +745,36 @@ func TestEnvironment_WithTask(t *testing.T) {
 	test.Eq(t, "", newMap2["env"])
 }
 
+// TestEnvironment_AnnotationMetaFiltered asserts that annotation meta keys
+// (containing '/') are never exposed to the task environment, since they are
+// control-plane bookkeeping rather than task configuration.
+func TestEnvironment_AnnotationMetaFiltered(t *testing.T) {
+	ci.Parallel(t)
+
+	a := mock.Alloc()
+	a.Job.Meta = map[string]string{
+		"jobmeta":         "jobmetaval",
+		"example.com/foo": "a",
+	}
+	task := a.Job.TaskGroups[0].Tasks[0]
+	task.Meta = map[string]string{
+		"taskmeta":        "taskmetaval",
+		"example.com/bar": "b",
+	}
+
+	envMap := NewBuilder(mock.Node(), a, task, "global").Build().Map()
+	test.Eq(t, "jobmetaval", envMap["NOMAD_META_jobmeta"])
+	test.Eq(t, "taskmetaval", envMap["NOMAD_META_taskmeta"])
+	test.Eq(t, "", envMap["NOMAD_META_example.com/foo"])
+	test.Eq(t, "", envMap["NOMAD_META_example.com/bar"])
+
+	// The per-task view used by hooks filters annotation keys as well
+	taskEnvMap := NewBuilder(mock.Node(), a, nil, "global").Build().WithTask(a, task).Map()
+	test.Eq(t, "taskmetaval", taskEnvMap["NOMAD_META_taskmeta"])
+	test.Eq(t, "", taskEnvMap["NOMAD_META_example.com/foo"])
+	test.Eq(t, "", taskEnvMap["NOMAD_META_example.com/bar"])
+}
+
 // TestEnvironment_InterpolateEmptyOptionalMeta asserts that in a parameterized
 // job, if an optional meta field is not set, it will get interpolated as an
 // empty string.

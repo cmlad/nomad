@@ -293,9 +293,12 @@ func tasksUpdated(jobA, jobB *structs.Job, taskGroup string) comparison {
 			return difference("task volume mount", at.VolumeMounts, bt.VolumeMounts)
 		}
 
-		// Check the metadata
-		metaA := jobA.CombinedTaskMeta(taskGroup, at.Name)
-		metaB := jobB.CombinedTaskMeta(taskGroup, bt.Name)
+		// Check the metadata. Annotation keys (containing '/') are not
+		// exposed to the task environment, so only runtime-visible meta
+		// requires a destructive update. Annotation meta updates are
+		// applied to allocations in-place.
+		metaA := structs.FilterRuntimeMeta(jobA.CombinedTaskMeta(taskGroup, at.Name))
+		metaB := structs.FilterRuntimeMeta(jobB.CombinedTaskMeta(taskGroup, bt.Name))
 		if !maps.Equal(metaA, metaB) {
 			return difference("task meta", metaA, metaB)
 		}

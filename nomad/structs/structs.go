@@ -4999,6 +4999,35 @@ func (j *Job) CombinedTaskMeta(groupName, taskName string) map[string]string {
 	return meta
 }
 
+// IsAnnotationMetaKey reports whether a meta key is an annotation. Annotation
+// keys — namespaced with a '/' prefix delimiter, e.g. "example.com/foo" —
+// are control-plane bookkeeping that is never injected into the task
+// environment, so changes to them do not require destructive allocation
+// updates. Keys without '/' keep their historical behavior of being exported
+// as NOMAD_META_* environment variables.
+func IsAnnotationMetaKey(key string) bool {
+	return strings.Contains(key, "/")
+}
+
+// FilterRuntimeMeta returns the subset of meta that is visible to tasks at
+// runtime (injected as NOMAD_META_* environment variables). Annotation keys
+// are excluded. The scheduler compares this view when deciding whether a job
+// update requires a destructive allocation update, keeping the comparison
+// consistent with what the task environment actually contains.
+func FilterRuntimeMeta(meta map[string]string) map[string]string {
+	if meta == nil {
+		return nil
+	}
+	runtime := make(map[string]string, len(meta))
+	for k, v := range meta {
+		if IsAnnotationMetaKey(k) {
+			continue
+		}
+		runtime[k] = v
+	}
+	return runtime
+}
+
 // Stopped returns if a job is stopped.
 func (j *Job) Stopped() bool {
 	return j == nil || j.Stop

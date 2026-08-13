@@ -4455,6 +4455,30 @@ func TestJob_CombinedTaskMeta(t *testing.T) {
 
 }
 
+func TestJob_AnnotationMeta(t *testing.T) {
+	ci.Parallel(t)
+
+	require := require.New(t)
+
+	require.True(IsAnnotationMetaKey("example.com/foo"))
+	require.False(IsAnnotationMetaKey("foo"))
+	require.False(IsAnnotationMetaKey("foo-bar"))
+	require.False(IsAnnotationMetaKey("elb_check_interval"))
+
+	require.Nil(FilterRuntimeMeta(nil))
+
+	filtered := FilterRuntimeMeta(map[string]string{
+		"owner":              "armon",
+		"example.com/foo":    "a",
+		"example.com/bar":    "b",
+		"elb_check_interval": "30s",
+	})
+	require.Equal(map[string]string{
+		"owner":              "armon",
+		"elb_check_interval": "30s",
+	}, filtered)
+}
+
 func TestPeriodicConfig_EnabledInvalid(t *testing.T) {
 	ci.Parallel(t)
 
